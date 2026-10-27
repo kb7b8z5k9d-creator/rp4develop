@@ -145,9 +145,9 @@ rooms, then the second launch. The pull requests in `docs/` tell each story in f
 
 ## Credits
 
-**[yujikaido](https://github.com/yujikaido)** - owner of the Retroid Pocket 4 Pro these fixes were found and
-tested on, and of this repository. Every build here went through many launch-test-rebuild rounds on that
-device over several days; the before/after screenshots are from those sessions. Questions about this build
+**[yujikaido](https://github.com/yujikaido)** - Using my own Retroid Pocket 4 Pro these fixes were found and
+tested on, and of this repository. Every build here went through many launch-test-rebuild rounds 
+ over several days; the before/after screenshots are from those sessions. Questions about this build
 and reports from other RP4 Pro owners go to this repository's Issues.
 
 [ASEbrahim](https://github.com/ASEbrahim) for MaliBridge and DroidDeck Mali, and
