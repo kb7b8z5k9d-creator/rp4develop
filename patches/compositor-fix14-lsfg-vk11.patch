@@ -1,0 +1,138 @@
+--- a/app/src/main/cpp/waylandcomp/src/framegen_engine.cpp
++++ b/app/src/main/cpp/waylandcomp/src/framegen_engine.cpp
+@@ -22,6 +22,9 @@
+ VkTable g_table{};
+ lsfg::Caps g_caps{};
+ VkPhysicalDeviceVulkan12Features g_v12{};
++/* Vulkan 1.1 drivers (Mali r32p1 on the Retroid Pocket 4 Pro) take the memory-model feature through its
++ * KHR struct; the 1.2 aggregate is refused below 1.2. */
++VkPhysicalDeviceVulkanMemoryModelFeaturesKHR g_mm{};
+ VkPhysicalDeviceFeatures2 g_f2{};
+ VkPhysicalDevice g_pd = VK_NULL_HANDLE;
+ VkDevice g_dev = VK_NULL_HANDLE;
+@@ -89,7 +92,9 @@
+     g_caps = lsfg::Caps{};
+ 
+ 
+-    g_caps.features = lsfg::queryFeatures(g_table, pd, exts,  false);
++    /* allowVk11: a 1.1 driver with VK_KHR_spirv_1_4, VK_KHR_shader_float_controls and
++     * VK_KHR_vulkan_memory_model runs the chain with its modules lowered to SPIR-V 1.4 (Mali r32p1). */
++    g_caps.features = lsfg::queryFeatures(g_table, pd, exts, true);
+     g_caps.probedFormat = ring_fmt;
+     g_caps.storageOnSwapchainFormat = g_table.GetPhysicalDeviceFormatProperties
+         ? lsfg::probeStorageFormat(g_table, pd, ring_fmt) : false;
+@@ -101,14 +106,22 @@
+         ELOG("device gates for the LSFG chain fail: %s", g_caps.reason);
+         return nullptr;
+     }
+-    g_v12 = VkPhysicalDeviceVulkan12Features{};
+-    g_v12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+-    g_v12.vulkanMemoryModel = VK_TRUE;
+-    g_v12.vulkanMemoryModelDeviceScope =
+-        g_caps.features.vulkanMemoryModelDeviceScope ? VK_TRUE : VK_FALSE;
++    const VkBool32 dev_scope = g_caps.features.vulkanMemoryModelDeviceScope ? VK_TRUE : VK_FALSE;
+     g_f2 = VkPhysicalDeviceFeatures2{};
+     g_f2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+-    g_f2.pNext = &g_v12;
++    if (g_caps.features.deviceApiVersion < VK_API_VERSION_1_2) {
++        g_mm = VkPhysicalDeviceVulkanMemoryModelFeaturesKHR{};
++        g_mm.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR;
++        g_mm.vulkanMemoryModel = VK_TRUE;
++        g_mm.vulkanMemoryModelDeviceScope = dev_scope;
++        g_f2.pNext = &g_mm;
++    } else {
++        g_v12 = VkPhysicalDeviceVulkan12Features{};
++        g_v12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
++        g_v12.vulkanMemoryModel = VK_TRUE;
++        g_v12.vulkanMemoryModelDeviceScope = dev_scope;
++        g_f2.pNext = &g_v12;
++    }
+     g_f2.features.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+     g_f2.features.shaderStorageImageExtendedFormats = VK_TRUE;
+     return &g_f2;
+@@ -134,6 +147,19 @@
+ 
+ const char *fge_caps_reason(void) { return g_caps.reason; }
+ 
++/* Device extensions the LSFG chain needs on this driver (only the Vulkan 1.1 path asks for any); the
++ * compositor enables them on the device it creates after fge_probe(). */
++int fge_device_extensions(const char **out, int max) {
++    if (!g_probed || !g_caps.features.deviceGatesPass()) return 0;
++    const std::vector<const char *> names = lsfg::extensionNames(g_caps.features);
++    int n = 0;
++    for (const char *name : names) {
++        if (n >= max) break;
++        out[n++] = name;
++    }
++    return n;
++}
++
+ int fge_format_ok(VkFormat fmt) {
+     if (!g_ready || !g_table.GetPhysicalDeviceFormatProperties || fmt == VK_FORMAT_UNDEFINED) return 0;
+     return lsfg::probeStorageFormat(g_table, g_pd, fmt) && lsfg::probeLinearBlit(g_table, g_pd, fmt) ? 1 : 0;
+--- a/app/src/main/cpp/waylandcomp/src/framegen_engine.h
++++ b/app/src/main/cpp/waylandcomp/src/framegen_engine.h
+@@ -16,6 +16,7 @@
+                       VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled);
+ int fge_caps_ok(int kind);
+ const char *fge_caps_reason(void);
++int fge_device_extensions(const char **out, int max);
+ int fge_format_ok(VkFormat fmt);
+ 
+ int fge_start(int kind, const char *cache_path);
+--- a/app/src/main/cpp/waylandcomp/src/framegen_engine_stub.c
++++ b/app/src/main/cpp/waylandcomp/src/framegen_engine_stub.c
+@@ -11,6 +11,7 @@
+ }
+ int fge_caps_ok(int kind) { (void)kind; return 0; }
+ const char *fge_caps_reason(void) { return "frame-generation engines not built into this compositor"; }
++int fge_device_extensions(const char **out, int max) { (void)out; (void)max; return 0; }
+ int fge_format_ok(VkFormat fmt) { (void)fmt; return 0; }
+ int fge_start(int kind, const char *cache_path) { (void)kind; (void)cache_path; return -1; }
+ void fge_stop(void) {}
+--- a/app/src/main/cpp/waylandcomp/src/framegen_bridge.c
++++ b/app/src/main/cpp/waylandcomp/src/framegen_bridge.c
+@@ -169,6 +169,8 @@
+     return fge_probe(gipa, inst, pd, VK_FORMAT_R8G8B8A8_UNORM);
+ }
+ 
++int vkp_framegen_device_extensions(const char **out, int max) { return fge_device_extensions(out, max); }
++
+ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled) {
+     g_dev = dev; g_queue = queue; g_qfam = qfam; g_features_enabled = features_enabled;
+ #define R(n) vk.n = (PFN_vk##n)g_vk.GetDeviceProcAddr(dev, "vk" #n)
+--- a/app/src/main/cpp/waylandcomp/src/framegen_bridge.h
++++ b/app/src/main/cpp/waylandcomp/src/framegen_bridge.h
+@@ -21,6 +21,9 @@
+ 
+ const void *vkp_framegen_device_features(VkInstance inst, PFN_vkGetInstanceProcAddr gipa,
+                                          VkPhysicalDevice pd);
++/* After vkp_framegen_device_features(): device extensions the engines need on this driver, appended
++ * to the compositor's list (a Vulkan 1.1 driver takes the LSFG chain through three KHR extensions). */
++int vkp_framegen_device_extensions(const char **out, int max);
+ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled);
+ void vkp_framegen_device_lost(void);
+ /* At each session start: the engine and the ring are dropped and rebuilt on first use (see the .c). */
+--- a/app/src/main/cpp/waylandcomp/src/vk_present.c
++++ b/app/src/main/cpp/waylandcomp/src/vk_present.c
+@@ -457,9 +457,9 @@
+     }
+     g_vk.GetPhysicalDeviceMemoryProperties(g_pd, &g_memprops);
+ 
+-    const char *dev_exts[9] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_external_memory_fd",
++    const char *dev_exts[12] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_external_memory_fd",
+                                "VK_EXT_external_memory_dma_buf", "VK_EXT_image_drm_format_modifier",
+-                               "VK_KHR_image_format_list", NULL, NULL, NULL, NULL};
++                               "VK_KHR_image_format_list", NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+     uint32_t n_dev_exts = 5;
+     uint32_t ne = 0;
+     g_vk.EnumerateDeviceExtensionProperties(g_pd, NULL, &ne, NULL);
+@@ -501,6 +501,8 @@
+     VkDeviceQueueCreateInfo qci = {.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                                    .queueFamilyIndex = g_qfam, .queueCount = 1, .pQueuePriorities = &prio};
+     const void *fg_features = vkp_framegen_device_features(g_inst, vk_loader_gipa(), g_pd);
++    if (fg_features)
++        n_dev_exts += (uint32_t)vkp_framegen_device_extensions(dev_exts + n_dev_exts, 12 - (int)n_dev_exts);
+     VkDeviceCreateInfo dci = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, .pNext = fg_features,
+                               .queueCreateInfoCount = 1, .pQueueCreateInfos = &qci,
+                               .enabledExtensionCount = n_dev_exts, .ppEnabledExtensionNames = dev_exts};

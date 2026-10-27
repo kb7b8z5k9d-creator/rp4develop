@@ -21,6 +21,7 @@ is safe on other phones, but nothing else has been tested on them.
 | Games installed on the SD card hang at a black screen (Ys Origin) | Android mounts the SD card noexec; DroidDeck's noexec shim only covered FEX processes, not Wine's ARM64EC ones | The shim covers Wine's processes too (`tools/linuxfs/preload/noexec.c`) |
 | **White rooms** in Ys Origin (any room with lighting effects, 12 fps) | The game keeps dead particles with NaN matrices in its draw list; a PC GPU drops them, r32p1 draws each as a sheet over the whole screen | New MaliBridge erratum `nan_position`: every vertex shader gets a guard that moves a NaN, Inf or zero-w position outside the clip volume |
 | **Press Play twice**: the first launch with frame generation on crashes the app | The Win-FG engine destroys its images and resets its descriptor pool while a frame is still in flight, and reuses descriptor sets from a destroyed pool at the same frame size | Waits for the GPU before both teardowns; the scratch cache is dropped with its pool |
+| **LSFG unavailable** ("device Vulkan version below 1.2") | The LSFG engine has a Vulkan 1.1 route through three KHR extensions, but the compositor never switched it on, handed the driver a 1.2-only feature struct and did not enable the extensions | fix14: the 1.1 route is on, the memory-model feature goes through its KHR struct, and the three extensions are enabled on the compositor's device |
 
 ## Screenshots
 
@@ -36,6 +37,13 @@ to 60 on screen), which used to crash:
 | Title | Win-FG second launch |
 |---|---|
 | ![title](screenshots/04-ys-origin-title-61fps.jpg) | ![win-fg](screenshots/09-win-fg-second-launch-60fps.jpg) |
+
+LSFG Native x2 (fix14) on the Vulkan 1.1 driver, which the stock build reports as unsupported: the Steam UI at
+10 real frames to 19 on screen, and Ys Origin at 50 to 60:
+
+| LSFG on the Steam UI | LSFG in Ys Origin |
+|---|---|
+| ![lsfg steam](screenshots/12-lsfg-steam-ui-hud.jpg) | ![lsfg ys](screenshots/11-lsfg-ys-origin-title-50-to-60fps.jpg) |
 
 How the white room was found. The sprite pipeline's pixels drawn as translucent red show its draws covering
 the whole screen (left). A diagnostic vertex shader then placed every draw in its own grid cell, green when
@@ -56,7 +64,7 @@ game you try; "Playable" means a full session without crashes or rendering fault
 | Game | Install | Status | FPS | Notes |
 |---|---|---|---|---|
 | Teenage Mutant Ninja Turtles: Shredder's Revenge | SD card | Playable | 60 average | D3D11 via DXVK, 1280x720, frame generation on; about 20 s black screen at start while shaders compile (normal) |
-| Ys Origin | SD card | Playable | 60-69 in rooms, 61 title | D3D8 32-bit; white rooms fixed by `nan_position`; refractive floors 50-60; Win-FG 2x works |
+| Ys Origin | SD card | Playable | 60-69 in rooms, 61 title | D3D8 32-bit; white rooms fixed by `nan_position`; refractive floors 50-60; Win-FG 2x and LSFG 2x (fix14) work |
 | | | | | |
 | | | | | |
 | | | | | |
@@ -66,7 +74,7 @@ whether the game is on internal storage or the SD card, and the frame-generation
 
 ## Installing
 
-`DroidDeck-MaliBridge-v0.5.4-rp4pro-fix13.apk` (on the [Releases](../../releases) page) is the stock v0.5.4 APK with three libraries replaced
+`DroidDeck-MaliBridge-v0.5.4-rp4pro-fix14.apk` (on the [Releases](../../releases) page; fix13 is the same without the LSFG change) is the stock v0.5.4 APK with three libraries replaced
 (the bridge server, the compositor, and the Linux-side preload), signed with a **personal debug key**, not the
 author's. Because of that:
 
@@ -81,7 +89,7 @@ author's. Because of that:
 | Part | Built from |
 |---|---|
 | `lib/arm64-v8a/libvkbridge_server.so`, `libvkbridge_jni.so` | MaliBridge, branch `rp4pro-fixes` (4 commits on v0.5.4) |
-| `lib/arm64-v8a/libdroiddeckwayland.so` | DroidDeck's compositor from the author's `mali-test-build` branch + `patches/compositor-fix7-fork-b3006a8a.patch` + `patches/compositor-fix13-winfg-waits.patch` |
+| `lib/arm64-v8a/libdroiddeckwayland.so` | DroidDeck's compositor from the author's `mali-test-build` branch + `patches/compositor-fix7-fork-b3006a8a.patch` + `patches/compositor-fix13-winfg-waits.patch` + `patches/compositor-fix14-lsfg-vk11.patch` |
 | `assets/linuxfs/libblsession.so` | DroidDeck preload, branch `rp4pro-noexec-arm64ec` |
 
 The patches in `patches/` apply to the fork's `app/src/main/cpp` tree; the same changes are committed on the
@@ -89,8 +97,10 @@ DroidDeck branches for `main`.
 
 ## Known limits
 
-- Only the Win-FG frame-generation engine is available on this device: LSFG needs Vulkan 1.2 and the r32p1
-  driver offers 1.1.
+- Frame generation x2 on the 60 Hz panel shows 30 real and 30 generated frames a second, so a game already
+  at 50-60 fps gains only pacing; the mode pays off for games that run at 30. LSFG costs about 20 ms of GPU
+  time per generated frame on this chip, Win-FG less. LSFG needs your own Lossless Scaling DLL loaded in
+  the app, as on every DroidDeck.
 - Ys Origin's refractive floors cost about 10 ms a frame on this GPU; rooms with one run at 50-60 fps rather
   than 70.
 - The `nan_position` erratum is switched on by driver version (r32). It needs a startup probe before it can
@@ -110,13 +120,14 @@ history, are on branches of the two forks, where each commit is one fix with its
 | 2026-10-27 | server: VKBRIDGE_AHB_RARELY from the env file; driver-module SPIR-V substitution (the shader bisection tool) |
 | 2026-10-27 | server: nan_position (MK-45), vertex positions guarded on Mali-G77 r32p1 (the white rooms) |
 
-**[yujikaido/DroidDeck](https://github.com/yujikaido/DroidDeck/branches), branches `rp4pro-noexec-arm64ec` and `rp4pro-framegen-session-reset`**
+**[yujikaido/DroidDeck](https://github.com/yujikaido/DroidDeck/branches), branches `rp4pro-noexec-arm64ec`, `rp4pro-framegen-session-reset` and `rp4pro-lsfg-vk11`**
 
 | Date | Commit |
 |---|---|
 | 2026-10-26 | preload/noexec: treat Wine's ARM64EC processes as FEX for noexec mounts (SD-card games) |
 | 2026-10-26 | waylandcomp: reset frame generation at each session start |
 | 2026-10-27 | framegen: wait for the GPU before a resize or scratch teardown; drop the scratch with its pool (press Play twice) |
+| 2026-10-27 | framegen: run the LSFG chain on Vulkan 1.1 drivers through its extension path (branch `rp4pro-lsfg-vk11`) |
 
 The order is the order the problems appeared: nothing started, then games from the SD card, then the white
 rooms, then the second launch. The pull requests in `docs/` tell each story in full, and
