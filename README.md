@@ -115,7 +115,8 @@ history, are on branches of the two forks, where each commit is one fix with its
 | 2026-10-27 | framegen: wait for the GPU before a resize or scratch teardown; drop the scratch with its pool (press Play twice) |
 
 The order is the order the problems appeared: nothing started, then games from the SD card, then the white
-rooms, then the second launch. The pull requests in `docs/` tell each story in full.
+rooms, then the second launch. The pull requests in `docs/` tell each story in full, and
+[`docs/PROGRESS-LOG.md`](docs/PROGRESS-LOG.md) is the unpolished day-by-day log, dead ends included.
 
 ## Repository layout
 
@@ -124,7 +125,7 @@ rooms, then the second launch. The pull requests in `docs/` tell each story in f
 | `screenshots/` | the images above |
 | `patches/` | the compositor and frame-generation patches against the `mali-test-build` fork |
 | `tools/` | the Vulkan probes run inside the DroidDeck rootfs during the investigation (`vk*.py`), the apitrace frame replay (`ys_replay.py`), and the preload build / APK repack scripts |
-| `docs/` | the pull-request write-ups sent upstream |
+| `docs/` | the pull-request write-ups sent upstream, and [`PROGRESS-LOG.md`](docs/PROGRESS-LOG.md), the day-by-day investigation log |
 
 ## Credits
 
