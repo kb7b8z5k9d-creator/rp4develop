@@ -92,6 +92,31 @@ DroidDeck branches for `main`.
 - The `nan_position` erratum is switched on by driver version (r32). It needs a startup probe before it can
   be offered to every Mali.
 
+## Source and commit history
+
+This repository holds the build, the write-ups and the evidence. The code changes themselves, with their
+history, are on branches of the two forks, where each commit is one fix with its reasoning in the message:
+
+**[yujikaido/MaliBridge](https://github.com/yujikaido/MaliBridge/commits/rp4pro-fixes), branch `rp4pro-fixes`** (on v0.5.4)
+
+| Date | Commit |
+|---|---|
+| 2026-10-26 | server: answer MUTABLE_FORMAT image format queries Mali r32p1 refuses (Steam starts) |
+| 2026-10-26 | server: linear images under the AHardwareBuffer memory strategy (twin images, linear tiling hidden) |
+| 2026-10-27 | server: VKBRIDGE_AHB_RARELY from the env file; driver-module SPIR-V substitution (the shader bisection tool) |
+| 2026-10-27 | server: nan_position (MK-45), vertex positions guarded on Mali-G77 r32p1 (the white rooms) |
+
+**[yujikaido/DroidDeck](https://github.com/yujikaido/DroidDeck/branches), branches `rp4pro-noexec-arm64ec` and `rp4pro-framegen-session-reset`**
+
+| Date | Commit |
+|---|---|
+| 2026-10-26 | preload/noexec: treat Wine's ARM64EC processes as FEX for noexec mounts (SD-card games) |
+| 2026-10-26 | waylandcomp: reset frame generation at each session start |
+| 2026-10-27 | framegen: wait for the GPU before a resize or scratch teardown; drop the scratch with its pool (press Play twice) |
+
+The order is the order the problems appeared: nothing started, then games from the SD card, then the white
+rooms, then the second launch. The pull requests in `docs/` tell each story in full.
+
 ## Repository layout
 
 | Folder | Contents |
