@@ -3,7 +3,11 @@
 yujikaido's fixed builds of [DroidDeck Mali](https://github.com/ASEbrahim/MaliBridge) (DroidDeck + MaliBridge) for the
 **Retroid Pocket 4 Pro** (MediaTek Dimensity 1100, Mali-G77 MC9, Android 13, Arm driver r32p1). The stock
 v0.5.4 build does not start on this device and two games showed GPU bugs; this build fixes those. Everything
-here is GPL-3.0, like the projects it is built from, and the fixes are being offered upstream.
+here is GPL-3.0, like the projects it is built from. The fixes are offered upstream as
+[ASEbrahim/MaliBridge#35](https://github.com/ASEbrahim/MaliBridge/pull/35),
+[Droid-Deck/DroidDeck#1692](https://github.com/Droid-Deck/DroidDeck/pull/1692) and
+[Droid-Deck/DroidDeck#1693](https://github.com/Droid-Deck/DroidDeck/pull/1693); once they land in an official
+release this build can be retired.
 
 Tested on one Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
