@@ -1,0 +1,38 @@
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/framegen/winfg/framegen.cpp wlsrc3/app/src/main/cpp/framegen/winfg/framegen.cpp
+--- wlsrc3-orig/app/src/main/cpp/framegen/winfg/framegen.cpp	2026-10-20 18:12:58.000000000 -0500
++++ wlsrc3/app/src/main/cpp/framegen/winfg/framegen.cpp	2026-10-27 13:11:38.229302400 -0500
+@@ -168,6 +168,9 @@
+ 
+ 
+     if (!force && ready_ && extent.width == extent_.width && extent.height == extent_.height) return true;
++    /* Mali (G77 r32p1, Retroid Pocket 4 Pro) faulted inside the driver when these images, and the
++     * descriptor sets naming them, went away under a frame still in flight: wait first. */
++    if (ready_ && dd_ && dd_->DeviceWaitIdle) dd_->DeviceWaitIdle(device_);
+     for (auto& i : pyrA_) destroyImage(i); pyrA_.clear();
+     for (auto& i : pyrB_) destroyImage(i); pyrB_.clear();
+     for (auto& i : pyrAs_) destroyImage(i); pyrAs_.clear();
+@@ -211,9 +214,12 @@
+ }
+ 
+ 
++static void destroyScratch(const DeviceDispatch* dd, VkDevice dev, VkDescriptorPool pool); /* record_impl.inc */
++
+ void FrameGen::destroy() {
+     if (!device_) return;
+     dd_->DeviceWaitIdle(device_);
++    destroyScratch(dd_, device_, descPool_); /* its sets came from this pool; a later engine at the same size must not reuse them */
+     for (auto& i : pyrA_) destroyImage(i); pyrA_.clear();
+     for (auto& i : pyrB_) destroyImage(i); pyrB_.clear();
+     for (auto& i : pyrAs_) destroyImage(i); pyrAs_.clear();
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/framegen/winfg/record_impl.inc wlsrc3/app/src/main/cpp/framegen/winfg/record_impl.inc
+--- wlsrc3-orig/app/src/main/cpp/framegen/winfg/record_impl.inc	2026-10-20 18:12:58.000000000 -0500
++++ wlsrc3/app/src/main/cpp/framegen/winfg/record_impl.inc	2026-10-27 13:11:17.263429000 -0500
+@@ -133,6 +133,8 @@
+                           int kLevels, const Config& cfg);
+ 
+ static void destroyScratch(const DeviceDispatch* dd, VkDevice dev, VkDescriptorPool pool) {
++    if (!g_scratch.built && !g_scratch.synthUbo) return;
++    if (dd->DeviceWaitIdle) dd->DeviceWaitIdle(dev); /* the sets and buffers may be in a frame still in flight (Mali faults otherwise) */
+     auto freeUbo = [&](VkBuffer& b, VkDeviceMemory& m, void*& p) {
+         if (m) dd->UnmapMemory(dev, m);
+         if (b) dd->DestroyBuffer(dev, b, nullptr);

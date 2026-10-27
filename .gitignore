@@ -1,0 +1,7 @@
+# APKs go on the Releases page, not into git
+*.apk
+release/
+
+# editor/OS noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,336 @@
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/blend_pass.c wlsrc3/app/src/main/cpp/waylandcomp/src/blend_pass.c
+--- app/src/main/cpp/waylandcomp/src/blend_pass.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/blend_pass.c	2026-10-27 06:21:46.644852100 -0500
+@@ -133,6 +133,20 @@
+     g_dsl = VK_NULL_HANDLE; g_sampler = VK_NULL_HANDLE;
+ }
+ 
++void blendp_destroy(void) {
++    if (!g_dev) return;
++    for (int i = 0; i < NSRC; i++) src_release(i);
++    for (int i = 0; i < NDST; i++) dst_release(i);
++    for (int i = 0; i < NFMT; i++) {
++        if (g_out[i].pipe) g_vk.DestroyPipeline(g_dev, g_out[i].pipe, NULL);
++        if (g_out[i].rp) g_vk.DestroyRenderPass(g_dev, g_out[i].rp, NULL);
++        g_out[i].pipe = VK_NULL_HANDLE; g_out[i].rp = VK_NULL_HANDLE; g_out[i].fmt = VK_FORMAT_UNDEFINED;
++    }
++    objects_destroy();
++    g_ready = 0;
++    g_dev = VK_NULL_HANDLE;
++}
++
+ static int objects_ensure(void) {
+     if (g_ready) return g_ready == 1 ? 0 : -1;
+     g_ready = -1;
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/blend_pass.h wlsrc3/app/src/main/cpp/waylandcomp/src/blend_pass.h
+--- app/src/main/cpp/waylandcomp/src/blend_pass.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/blend_pass.h	2026-10-27 06:21:46.643846400 -0500
+@@ -4,6 +4,7 @@
+ #include <vulkan/vulkan.h>
+ 
+ void blendp_bind_device(VkDevice dev);
++void blendp_destroy(void); /* every device object; the next bind_device starts over */
+ void blendp_forget_image(VkImage img);
+ void blendp_begin_frame(void);
+ 
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/cardboard.c wlsrc3/app/src/main/cpp/waylandcomp/src/cardboard.c
+--- app/src/main/cpp/waylandcomp/src/cardboard.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/cardboard.c	2026-10-27 06:21:46.632291400 -0500
+@@ -200,6 +200,15 @@
+     g_nsrc = 0;
+ }
+ 
++static void objects_destroy(void);
++
++void vkp_cardboard_destroy(void) {
++    if (!g_dev) return;
++    objects_destroy();
++    g_ready = 0;
++    g_dev = VK_NULL_HANDLE;
++}
++
+ void vkp_cardboard_begin_frame(void) {
+     if (g_ready == 1) sources_release();
+ }
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/cardboard.h wlsrc3/app/src/main/cpp/waylandcomp/src/cardboard.h
+--- app/src/main/cpp/waylandcomp/src/cardboard.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/cardboard.h	2026-10-27 06:21:46.631261400 -0500
+@@ -22,6 +22,7 @@
+ void vkp_cardboard_set_pose_file(const char *path);
+ 
+ void vkp_cardboard_bind_device(VkDevice dev, const VkPhysicalDeviceMemoryProperties *memprops);
++void vkp_cardboard_destroy(void); /* every device object; the next bind_device starts over */
+ int vkp_cardboard_active(void);
+ int vkp_cardboard_pose_changed(void);
+ void vkp_cardboard_begin_frame(void);
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/compositor.c wlsrc3/app/src/main/cpp/waylandcomp/src/compositor.c
+--- app/src/main/cpp/waylandcomp/src/compositor.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/compositor.c	2026-10-27 06:21:46.671930600 -0500
+@@ -3109,7 +3109,9 @@
+     wl_list_init(&g_relative_pointers);
+     open_session_log();
+ 
++    vkp_recover_if_lost(); /* a device lost in the previous session: a new device before anything is drawn */
+     if (vkp_ready() != 0) WLOGE("renderer unavailable; clients will connect but nothing is drawn");
++    vkp_framegen_session_begin(); /* the previous session's engine and ring are not reused (Mali faulted on them) */
+ 
+     struct wl_display *display = wl_display_create();
+     if (!display) {
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/framegen_bridge.c wlsrc3/app/src/main/cpp/waylandcomp/src/framegen_bridge.c
+--- app/src/main/cpp/waylandcomp/src/framegen_bridge.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/framegen_bridge.c	2026-10-27 06:21:46.631261400 -0500
+@@ -179,6 +179,7 @@
+     g_vk.GetPhysicalDeviceMemoryProperties(g_pd, &g_memprops);
+     fge_device_ready(g_gipa, g_inst, g_pd, dev, queue, qfam, features_enabled);
+     g_dev_ready = vk.CreateImage && vk.CreateImageView && vk.CmdPipelineBarrier;
++    g_dev_lost = 0;
+     FGLOG("engines ready on the compositor's device: LSFG Native %s (%s), Win-FG Native %s",
+           fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable", fge_caps_reason(),
+           fge_caps_ok(VKP_FG_ENGINE_WINFG) ? "available" : "unavailable");
+@@ -186,6 +187,57 @@
+ 
+ void vkp_framegen_device_lost(void) { g_dev_lost = 1; }
+ 
++static void destroy_ring(void);
++
++static void reset_engine_state(void) {
++    destroy_ring();
++    if (g_engine_ok) fge_stop();
++    g_engine_ok = 0; g_engine_kind = -1;
++    g_built_w = g_built_h = 0; g_built_fmt = VK_FORMAT_UNDEFINED;
++    g_generating_logged = 0;
++    g_was_armed = 0;
++    atomic_store(&g_cfg_dirty, 1);
++}
++
++/*
++ * The swapchain rebuild for a changed number of presents per frame is the other place where the
++ * engine met a changed world with its old descriptors: on 2026-10-27 05:29:25 (Retroid Pocket 4
++ * Pro) the device was lost in the first present after exactly that rebuild, on a game's second
++ * launch in one session. The engine and the ring start over there too.
++ */
++void vkp_framegen_rearm(void) {
++    if (!g_dev_ready) return;
++    if (g_ring_n || g_engine_ok) FGLOG("re-armed: frame generation reset (engine and ring rebuilt on first use)");
++    reset_engine_state();
++}
++
++void vkp_framegen_device_teardown(void) {
++    if (!g_dev_ready) { g_dev_lost = 0; return; }
++    reset_engine_state();
++    fge_stop();
++    g_dev_ready = 0;
++    g_dev_lost = 0;
++    g_dev = VK_NULL_HANDLE; g_queue = VK_NULL_HANDLE;
++}
++
++static void destroy_ring(void);
++
++/*
++ * A session boundary: the engine and the ring are dropped, so the next session builds them from
++ * nothing. The device outlives sessions (dev_init runs once per process), and so did the engine's
++ * images, views and descriptor sets: the second session in a process began by rebuilding them for
++ * its own size, and Mali (G77 r32p1, Retroid Pocket 4 Pro) faulted inside vkUpdateDescriptorSets
++ * while overwriting descriptors that still named the destroyed views - a null dereference in the
++ * driver at vkp_framegen_run -> record (2026-10-26, "Thread-5" SIGSEGV, fault address 0x68); every
++ * session after the first in a process ended there, and DroidDeck needed a second Play press for
++ * the fresh process it got. Starting clean costs one engine build per session.
++ */
++void vkp_framegen_session_begin(void) {
++    if (!g_dev_ready) return;
++    if (g_ring_n || g_engine_ok) FGLOG("session start: frame generation reset (engine and ring rebuilt on first use)");
++    reset_engine_state();
++}
++
+ 
+ static void destroy_ring(void) {
+     if (!g_ring_n) return;
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/framegen_bridge.h wlsrc3/app/src/main/cpp/waylandcomp/src/framegen_bridge.h
+--- app/src/main/cpp/waylandcomp/src/framegen_bridge.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/framegen_bridge.h	2026-10-27 06:21:46.616236700 -0500
+@@ -23,6 +23,13 @@
+                                          VkPhysicalDevice pd);
+ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled);
+ void vkp_framegen_device_lost(void);
++/* At each session start: the engine and the ring are dropped and rebuilt on first use (see the .c). */
++void vkp_framegen_session_begin(void);
++/* The swapchain is rebuilt for a change of presents per frame (arming, disarming): same reset. */
++void vkp_framegen_rearm(void);
++/* The compositor's VkDevice is going away (recovery after a device loss): every engine object is
++ * dropped now; vkp_framegen_device_ready() follows with the new device. */
++void vkp_framegen_device_teardown(void);
+ 
+ int vkp_framegen_active(void);
+ int vkp_framegen_extra_images(void);
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/sc_layer.c wlsrc3/app/src/main/cpp/waylandcomp/src/sc_layer.c
+--- app/src/main/cpp/waylandcomp/src/sc_layer.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/sc_layer.c	2026-10-27 06:21:46.656395500 -0500
+@@ -1010,6 +1010,12 @@
+     drain_and_free_pools();
+ }
+ 
++void sc_layer_release_pools(void) {
++    if (api.state != 1) return;
++    for (int i = SC_LAYER_COUNT - 1; i >= 0; i--) retire_sc(&g_layers[i]);
++    drain_and_free_pools();
++}
++
+ unsigned sc_layer_frames_take(void) {
+     unsigned n = g_stat_layer_frames;
+     g_stat_layer_frames = 0;
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/sc_layer.h wlsrc3/app/src/main/cpp/waylandcomp/src/sc_layer.h
+--- app/src/main/cpp/waylandcomp/src/sc_layer.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/sc_layer.h	2026-10-27 06:21:46.654393200 -0500
+@@ -39,6 +39,8 @@
+ void sc_layer_hide_overlay(void);
+ 
+ void sc_layer_window_gone(void);
++/* Every pool slot's image and buffer are released now (the compositor's VkDevice is going away). */
++void sc_layer_release_pools(void);
+ 
+ unsigned sc_layer_frames_take(void);
+ unsigned sc_layer_drops_take(void);
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/vk_loader.h wlsrc3/app/src/main/cpp/waylandcomp/src/vk_loader.h
+--- app/src/main/cpp/waylandcomp/src/vk_loader.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/vk_loader.h	2026-10-27 06:22:47.559367600 -0500
+@@ -31,7 +31,7 @@
+     X(CreateDescriptorPool) X(DestroyDescriptorPool) X(AllocateDescriptorSets) X(FreeDescriptorSets) \
+     X(UpdateDescriptorSets) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) \
+     X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdDraw) X(CmdSetViewport) X(CmdSetScissor) \
+-      \
++    X(DestroyFence) X(DestroyCommandPool) X(DestroyDevice) \
+     X(DestroySemaphore)
+ 
+ struct vk_api {
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/vk_present.c wlsrc3/app/src/main/cpp/waylandcomp/src/vk_present.c
+--- app/src/main/cpp/waylandcomp/src/vk_present.c	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/vk_present.c	2026-10-27 06:22:18.892384800 -0500
+@@ -248,6 +248,61 @@
+ 
+ int vkp_device_lost(void) { return g_dev_state == -2; }
+ 
++static void scene_images_release(void);
++static int dev_init(void);
++
++/*
++ * VK_ERROR_DEVICE_LOST used to end presenting for the rest of the process: dev_init ran once, so
++ * every later session rendered scenes that never reached the screen ("0 on screen", DroidDeck at
++ * "waiting for first frame") until the app was restarted (Retroid Pocket 4 Pro, 2026-10-27 05:29).
++ * A session start finds the loss here, drops the dead device with everything made on it, and
++ * dev_init makes a new device on the same instance. Nothing of the old device may survive: the
++ * pass modules, the frame generation engines, the layer pools, the scene images, the sync objects
++ * and the command pool are all released first. Client images went with the previous session's
++ * clients; the swapchain and the surface went in device_lost().
++ */
++int vkp_recover_if_lost(void) {
++    if (g_dev_state != -2) return 0;
++    if (g_dev) {
++        g_vk.DeviceWaitIdle(g_dev); /* VK_ERROR_DEVICE_LOST here is expected and harmless */
++        vkp_framegen_device_teardown();
++        sc_layer_release_pools();
++        vkp_effects_destroy();
++        vkp_cardboard_destroy();
++        hdrc_destroy();
++        blendp_destroy();
++        scene_images_release();
++        if (g_black_img) g_vk.DestroyImage(g_dev, g_black_img, NULL);
++        if (g_black_mem) g_vk.FreeMemory(g_dev, g_black_mem, NULL);
++        g_black_img = VK_NULL_HANDLE; g_black_mem = VK_NULL_HANDLE; g_black_state = 0;
++        for (int k = 0; k < MAX_PRESENTS; k++) {
++            if (g_acqs[k]) g_vk.DestroySemaphore(g_dev, g_acqs[k], NULL);
++            if (g_rnds[k]) g_vk.DestroySemaphore(g_dev, g_rnds[k], NULL);
++            g_acqs[k] = VK_NULL_HANDLE; g_rnds[k] = VK_NULL_HANDLE;
++        }
++        if (g_wait_sem) g_vk.DestroySemaphore(g_dev, g_wait_sem, NULL);
++        g_wait_sem = VK_NULL_HANDLE; g_import_sem_fd = NULL;
++        if (g_fence) g_vk.DestroyFence(g_dev, g_fence, NULL);
++        g_fence = VK_NULL_HANDLE;
++        if (g_pool) g_vk.DestroyCommandPool(g_dev, g_pool, NULL); /* frees g_cmds */
++        g_pool = VK_NULL_HANDLE;
++        memset(g_cmds, 0, sizeof(g_cmds));
++        g_get_ahb_props = NULL; g_set_hdr_metadata = NULL;
++        g_vk.DestroyDevice(g_dev, NULL);
++        g_dev = VK_NULL_HANDLE; g_queue = VK_NULL_HANDLE;
++    }
++    g_dev_state = 0;
++    g_base_black = 0;
++    g_swap_extra = 0; g_swap_is_hdr = 0; g_swap_hdr_want = 0; g_swap_md_identity = 0;
++    g_swap_retry_at_ns = 0; g_swap_fail_logged = 0;
++    if (dev_init() != 0) {
++        droiddeck_log("error", "GPU device lost: a new Vulkan device could not be made; restart the app");
++        return -1;
++    }
++    droiddeck_log("error", "GPU device recovered after device loss: a new Vulkan device for this session");
++    return 0;
++}
++
+ void vk_present_set_scale_mode(int mode, int alignment) {
+     if (mode < VKP_MODE_OFF || mode > VKP_MODE_INTEGER) mode = VKP_MODE_FIT;
+     if (alignment < VKP_ALIGN_CENTER || alignment > VKP_ALIGN_BOTTOM) alignment = VKP_ALIGN_CENTER;
+@@ -334,6 +389,9 @@
+ static int dev_init(void) {
+     if (g_dev_state != 0) return g_dev_state == 1 ? 0 : -1;
+ 
++    /* The loader, the instance and the physical device are made once per process; a recovery after a
++     * device loss (vkp_recover_if_lost) makes only a new VkDevice on them. */
++    if (g_inst == VK_NULL_HANDLE) {
+     if (vk_loader_open(g_driver_path, g_library_name, g_native_lib_dir) != 0) {
+         LOGE("present: vk_loader_open failed"); g_dev_state = -1; return -1;
+     }
+@@ -385,6 +443,7 @@
+             if (qs[q].queueFlags & VK_QUEUE_GRAPHICS_BIT) { g_pd = pds[i]; g_qfam = q; break; }
+     }
+     if (g_pd == VK_NULL_HANDLE) { LOGE("present: no graphics queue"); g_dev_state = -1; return -1; }
++    }
+     uint32_t vendor_id, pd_api;
+     {
+         VkPhysicalDeviceProperties props;
+@@ -1216,6 +1275,25 @@
+     return 0;
+ }
+ 
++static void slot_release(struct vkp_img_slot *s) {
++    if (s->img) hdrc_forget_image(s->img);
++    if (s->img) vkp_effects_forget_image(s->img);
++    if (s->img) blendp_forget_image(s->img);
++    if (s->img) g_vk.DestroyImage(g_dev, s->img, NULL);
++    if (s->mem) g_vk.FreeMemory(g_dev, s->mem, NULL);
++    memset(s, 0, sizeof(*s));
++}
++
++static void scene_images_release(void) {
++    if (g_scene.img) vkp_effects_forget_image(g_scene.img);
++    if (g_scene.img) hdrc_forget_image(g_scene.img);
++    if (g_scene.img) blendp_forget_image(g_scene.img);
++    if (g_scene.img) g_vk.DestroyImage(g_dev, g_scene.img, NULL);
++    if (g_scene.mem) g_vk.FreeMemory(g_dev, g_scene.mem, NULL);
++    memset(&g_scene, 0, sizeof(g_scene));
++    slot_release(&g_mixed); slot_release(&g_hdrscene); slot_release(&g_fgscene);
++}
++
+ static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImageUsageFlags usage, const char *what) {
+     if (s->img && s->w == w && s->h == h && s->fmt == fmt) return 0;
+     if (s->img) hdrc_forget_image(s->img);
+@@ -1537,7 +1615,8 @@
+     if (g_swapchain && vkp_framegen_extra_images() != g_swap_extra) {
+         droiddeck_log("gpu", "frame generation now wants %d present%s per frame: rebuilding the swapchain",
+                    1 + vkp_framegen_extra_images(), vkp_framegen_extra_images() ? "s" : "");
+-        destroy_swapchain();
++        destroy_swapchain(); /* waits for the device to be idle first */
++        vkp_framegen_rearm();
+     }
+     const int want_hdr = hf && !hf->tonemap && g_colorspace_ext && !g_swap_hdr_unavailable;
+     if (g_swapchain && want_hdr != g_swap_is_hdr) {
+diff -ruN --strip-trailing-cr wlsrc3-orig/app/src/main/cpp/waylandcomp/src/vk_present.h wlsrc3/app/src/main/cpp/waylandcomp/src/vk_present.h
+--- app/src/main/cpp/waylandcomp/src/vk_present.h	2026-10-20 18:12:58.000000000 -0500
++++ app/src/main/cpp/waylandcomp/src/vk_present.h	2026-10-27 06:21:46.669423600 -0500
+@@ -58,6 +58,9 @@
+ int vkp_ready(void);
+ int vkp_has_window(void);
+ int vkp_device_lost(void);
++/* At a session start after VK_ERROR_DEVICE_LOST: the dead device and everything on it are dropped
++ * and a new one is made (0 = nothing to do or recovered, -1 = the new device could not be made). */
++int vkp_recover_if_lost(void);
+ 
+ int vkp_render(int scene_w, int scene_h, const struct vkp_draw *draws, int n);
+ int vkp_render_plain(int scene_w, int scene_h);
