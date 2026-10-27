@@ -3,11 +3,11 @@
 yujikaido's fixed builds of [DroidDeck Mali](https://github.com/ASEbrahim/MaliBridge) (DroidDeck + MaliBridge) for the
 **Retroid Pocket 4 Pro** (MediaTek Dimensity 1100, Mali-G77 MC9, Android 13, Arm driver r32p1). The stock
 v0.5.4 build does not start on this device and two games showed GPU bugs; this build fixes those. Everything
-here is GPL-3.0, like the projects it is built from. The fixes are offered upstream as
-[ASEbrahim/MaliBridge#35](https://github.com/ASEbrahim/MaliBridge/pull/35),
-[Droid-Deck/DroidDeck#1692](https://github.com/Droid-Deck/DroidDeck/pull/1692) and
-[Droid-Deck/DroidDeck#1693](https://github.com/Droid-Deck/DroidDeck/pull/1693); once they land in an official
-release this build can be retired.
+here is GPL-3.0, like the projects it is built from. The bridge fixes are offered upstream as
+[ASEbrahim/MaliBridge#35](https://github.com/ASEbrahim/MaliBridge/pull/35). The DroidDeck fixes were offered as
+[#1692](https://github.com/Droid-Deck/DroidDeck/pull/1692) and [#1693](https://github.com/Droid-Deck/DroidDeck/pull/1693)
+and withdrawn: that project's CI rejects commits carrying an AI co-author trailer, and these were written with
+Claude Code, so they live on the fork branches below instead. Maintainers are welcome to take them from there.
 
 Tested on one Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
@@ -127,6 +127,7 @@ history, are on branches of the two forks, where each commit is one fix with its
 | 2026-10-26 | preload/noexec: treat Wine's ARM64EC processes as FEX for noexec mounts (SD-card games) |
 | 2026-10-26 | waylandcomp: reset frame generation at each session start |
 | 2026-10-27 | framegen: wait for the GPU before a resize or scratch teardown; drop the scratch with its pool (press Play twice) |
+| 2026-10-27 | framegen: drop the scratch at a resize too; forget refused formats at session start (review follow-ups) |
 | 2026-10-27 | framegen: run the LSFG chain on Vulkan 1.1 drivers through its extension path (branch `rp4pro-lsfg-vk11`) |
 
 The order is the order the problems appeared: nothing started, then games from the SD card, then the white
