@@ -210,6 +210,9 @@ internal fun ProgressLabel(label: @Composable (Modifier) -> Unit, progress: Floa
     }
 }
 
+/** Inside it, a focused SecondaryButton fills with the signal colour as Play does (retro mode), not just its edge. */
+internal val LocalSolidFocus = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 internal fun SecondaryButton(
     text: String, enabled: Boolean = true, compact: Boolean = false, modifier: Modifier = Modifier, progress: Float? = null,
@@ -223,7 +226,9 @@ internal fun SecondaryButton(
     val pressed by src.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.955f else if (hot) 1.02f else 1f, Motion.sp(0.5f, Spring.StiffnessMedium), label = "secScale")
     val pal = LocalPalette.current
-    val fill by animateColorAsState(if (hot) pal.signal.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.03f), Motion.tw(250), label = "secFill")
+    val solid = hot && LocalSolidFocus.current
+    val fill by animateColorAsState(if (solid) pal.signal else if (hot) pal.signal.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.03f), Motion.tw(if (solid) 120 else 250), label = "secFill")
+    val ink = if (solid) Color.White else colors.onBackground
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier.paneItem("btn:" + text.ifEmpty { "icon:" + icon?.name }).downToFirstTile().heightIn(min = if (compact) 44.dp else 48.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(Shape12).background(fill).glideBorder(hot, Shape12, pal.signal, pal.line2)
@@ -233,10 +238,10 @@ internal fun SecondaryButton(
             .padding(horizontal = if (compact) 10.dp else 16.dp, vertical = if (compact) 7.dp else 11.dp),
     ) {
         if (icon != null) Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = text.ifEmpty { null }, tint = iconTint ?: colors.onBackground, modifier = Modifier.size(if (compact) 18.dp else 20.dp))
-            if (text.isNotEmpty()) Text(text, fontSize = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = colors.onBackground, maxLines = 1, modifier = Modifier.padding(start = 6.dp))
+            Icon(icon, contentDescription = text.ifEmpty { null }, tint = iconTint ?: ink, modifier = Modifier.size(if (compact) 18.dp else 20.dp))
+            if (text.isNotEmpty()) Text(text, fontSize = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = ink, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
         }
-        else ProgressLabel({ m -> Text(text, fontSize = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = colors.onBackground, maxLines = 1, modifier = m) },
+        else ProgressLabel({ m -> Text(text, fontSize = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp, color = ink, maxLines = 1, modifier = m) },
             progress, fontSize = if (compact) 12.sp else 15.sp)
     }
 }

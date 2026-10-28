@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
@@ -72,6 +73,8 @@ internal fun RetroSettingsPage(s: FrontEndState, a: FrontEndActions, modifier: M
     val context = androidx.compose.ui.platform.LocalContext.current
     var listDefault by remember { mutableStateOf(RetroLibrary.listView(context)) }
     var choosingView by remember { mutableStateOf(false) }
+    var coverDefault by remember { mutableStateOf(RetroLibrary.listCover(context)) }
+    var choosingPicture by remember { mutableStateOf(false) }
     BackHandler(enabled = page != null) {
         val from = page ?: return@BackHandler
         page = null
@@ -102,6 +105,12 @@ internal fun RetroSettingsPage(s: FrontEndState, a: FrontEndActions, modifier: M
                     listDefault = i == 0
                     RetroLibrary.setListView(context, listDefault)
                 }, onDismiss = { choosingView = false })
+                val pictures = listOf(stringResource(R.string.retro_picture_snap), stringResource(R.string.retro_picture_cover))
+                SettingRow(Icons.Outlined.Image, stringResource(R.string.retro_list_picture), pictures[if (coverDefault) 1 else 0], rowFor("picture")) { choosingPicture = true }
+                if (choosingPicture) RetroChoiceDialog(stringResource(R.string.retro_list_picture), pictures, if (coverDefault) 1 else 0, onPick = { i ->
+                    coverDefault = i == 1
+                    RetroLibrary.setListCover(context, coverDefault)
+                }, onDismiss = { choosingPicture = false })
                 SettingsHeader(stringResource(R.string.retro_section_appearance))
                 SettingRow(Icons.Outlined.Wallpaper, stringResource(R.string.retro_wallpapers), s.retroPack ?: stringResource(R.string.retro_wallpapers_none), rowFor("wallpapers")) { page = "wallpapers" }
                 SettingsHeader(stringResource(R.string.retro_section_about))

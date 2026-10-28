@@ -560,7 +560,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             enter = fadeIn(Motion.tw(280)) + androidx.compose.animation.scaleIn(Motion.tw(380), initialScale = 1.06f),
             exit = androidx.compose.animation.ExitTransition.None,
             label = "retroMode",
-        ) { RetroMode(s, a) { RetroNav.open = false } }
+        ) { CompositionLocalProvider(LocalSolidFocus provides true) { RetroMode(s, a) { RetroNav.open = false } } }
 
         }
         FlightsLayer(screenAt)

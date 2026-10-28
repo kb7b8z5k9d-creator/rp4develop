@@ -45,6 +45,13 @@ object RetroLibrary {
         prefs(context).edit().putBoolean("listView", list).apply()
     }
 
+    /** Whether the list shows a game's cover art (else its screenshot, the default). */
+    fun listCover(context: Context): Boolean = prefs(context).getBoolean("listCover", false)
+
+    fun setListCover(context: Context, cover: Boolean) {
+        prefs(context).edit().putBoolean("listCover", cover).apply()
+    }
+
     fun extraRoots(context: Context): List<String> =
         prefs(context).getString("roots", "").orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
 
