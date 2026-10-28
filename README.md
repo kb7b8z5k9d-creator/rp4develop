@@ -19,9 +19,10 @@ it once it holds up in real play:
 
 - **Rebased on DroidDeck Mali v0.5.4.1.** The bridge fixes now sit on top of ASEbrahim's v0.5.4.1 release. Steam,
   Ys I, Ys Origin's rooms and sleep/resume have been checked on it.
-- **A Retro tab.** A Daijishō-style front end for emulators, built into DroidDeck: a carousel of systems with
-  Daijishō's wallpapers, then each system's games as a box-art grid or as a list with a screenshot of the
-  selected game. It picks up your existing `Roms` folders on internal storage and the SD card. Covers,
+- **A Retro tab.** A front end for your emulators, built into DroidDeck so Steam games and retro games live in
+  one place (inspired by Daijishō, see Credits). It shows a carousel of systems, then each system's games as a
+  box-art grid or as a list with a screenshot of the selected game. It picks up your existing `Roms` folders
+  on internal storage and the SD card. Covers,
   screenshots and game info (genre, year, developer) come from libretro's databases, and PSP, GameCube and
   cartridge games are named from the disc or a checksum rather than the file name. Each system has a Settings
   panel where you choose its emulator (RetroArch cores, PPSSPP, Dolphin, DraStic and so on) and see its
@@ -200,6 +201,20 @@ and reports from other RP4 Pro owners go to this repository's Issues.
 
 [ASEbrahim](https://github.com/ASEbrahim) for MaliBridge and DroidDeck Mali, and
 [Droid-Deck](https://github.com/Droid-Deck/DroidDeck) for DroidDeck, which this build is made from.
+
+The Retro tab (next build) was inspired by [Daijishō](https://github.com/TapiocaFox/Daijishou) by TapiocaFox, a
+great emulator front end for Android, and the one I used before this. The Retro tab's code is new, written for
+this build; Daijishō's app is closed source and none of its code is used. What the Retro tab does use from the
+Daijishō project, with thanks:
+
+- its **platform definitions** (which emulator apps can play each system, and how to launch them), bundled with
+  their MIT license, so emulator support matches what Daijishō users already know
+- its community **wallpaper packs**, which you can choose to download from the Daijishō repository; the
+  pictures belong to their makers
+
+Box art and screenshots come from [libretro-thumbnails](https://github.com/libretro-thumbnails), game info and
+checksum names from [libretro-database](https://github.com/libretro/libretro-database), and arcade names from
+the [MAME 2003-Plus](https://github.com/libretro/mame2003-plus-libretro) metadata.
 
 The debugging itself (probes, shader bisection, the apitrace replay and the patches) was done with Claude
 (Anthropic) driving the device over adb under yujikaido's direction; the write-ups are in the pull requests.
