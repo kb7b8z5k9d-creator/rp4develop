@@ -260,7 +260,11 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
         val open: (Int) -> Unit = { i -> onSelect("rgame:${sys.platform.id}:$i") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (listView) LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-                itemsIndexed(shown) { _, (i, g) -> GalleryRow(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
+                itemsIndexed(shown) { _, (i, g) ->
+                    val detail = listOfNotNull(sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
+                        s.retroStats[g.hostPath.path]?.let { playedLine(it) }, g.hostPath.extension.uppercase().takeIf { it.isNotEmpty() }).joinToString("   ·   ")
+                    GalleryRow(g, detail, g.hostPath.path in s.retroFavorites, focusedIndex == i, { focusedIndex = i }) { open(i) }
+                }
             } else LazyVerticalGrid(
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
@@ -320,18 +324,20 @@ private fun GalleryCell(g: Library.Rom, focused: Boolean, onFocus: () -> Unit, o
 }
 
 @Composable
-private fun GalleryRow(g: Library.Rom, focused: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun GalleryRow(g: Library.Rom, detail: String, favorite: Boolean, focused: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (focused) colors.surfaceVariant else Color.Transparent)
             .onFocusChanged { if (it.isFocused) onFocus() }.clickable { onFocus(); onClick() }.padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
-        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
             if (g.art != null) AsyncImage(model = g.art, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             else Box(Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(6.dp)).background(artBrush(hueOf(g.name))))
         }
-        Text(g.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(g.hostPath.extension.uppercase(), fontSize = 12.sp, color = colors.onSurfaceVariant)
+        Column(Modifier.weight(1f)) {
+            Text((if (favorite) "★ " else "") + g.name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (detail.isNotEmpty()) Text(detail, fontSize = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        }
     }
 }

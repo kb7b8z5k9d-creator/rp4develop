@@ -74,8 +74,9 @@ object CoverArt {
 
     private fun findUrl(context: Context, rom: Library.Rom): String? {
         val fileName = rom.hostPath.nameWithoutExtension.removeSuffix(".dec")
-        // the file's name, then the name shown (a PSP disc's own title, an arcade set's title)
-        for (name in listOf(fileName, rom.name).distinct()) for (collection in collectionsOf(context, rom.emulatorId).orEmpty()) {
+        // the file's name, its No-Intro name (libretro names its thumbnails so), then the name shown (a PSP disc's own title, an arcade set's)
+        val dump = rom.emulatorId.takeIf { it.startsWith(RetroLibrary.ID_PREFIX) }?.let { NoIntro.name(context, it.removePrefix(RetroLibrary.ID_PREFIX), rom.hostPath) }
+        for (name in listOfNotNull(fileName, dump, rom.name).distinct()) for (collection in collectionsOf(context, rom.emulatorId).orEmpty()) {
             val exact = thumbnailUrl(collection, name)
             if (exists(exact)) return exact
             nearest(name, names(context, collection))?.let { return thumbnailUrl(collection, it) }
@@ -110,10 +111,27 @@ object CoverArt {
         if (candidates.isEmpty()) return null
         val want = base(name)
         if (want.isEmpty()) return null
-        val same = candidates.filter { base(it) == want }
+        val same = candidates.filter { base(it) == want }.ifEmpty { subtitled(want, candidates) }
         if (same.isEmpty()) return null
         val region = tags(name).firstOrNull { it in setOf("usa", "europe", "japan", "world", "korea") } ?: "usa"
         return same.firstOrNull { region in tags(it) } ?: same.firstOrNull { "usa" in tags(it) } ?: same.first()
+    }
+
+    private fun digits(words: Set<String>) = words.filter { w -> w.any { it.isDigit() } }.toSet()
+
+    /**
+     * Names that add a subtitle to the file's (Donkey Kong Country 2 -> Donkey Kong Country 2 - Diddy's Kong Quest):
+     * every word of the file's name present, the numbers the same (a sequel is not its first game), at most five words
+     * more; the fewest extra words win.
+     */
+    private fun subtitled(want: String, candidates: List<String>): List<String> {
+        val w = want.split(' ').toSet()
+        val fits = candidates.mapNotNull { c ->
+            val h = base(c).split(' ').toSet()
+            if (h.containsAll(w) && digits(h) == digits(w) && h.size - w.size <= 5) c to (h.size - w.size) else null
+        }
+        val least = fits.minOfOrNull { it.second } ?: return emptyList()
+        return fits.filter { it.second == least }.map { it.first }
     }
 
     private fun names(context: Context, collection: String): List<String> {
@@ -254,16 +272,26 @@ object CoverArt {
         return n
     }
 
-    private fun download(url: String, target: File): Boolean = try {
-        val c = open(url)
-        if (c.responseCode != 200) { c.disconnect(); false } else {
-            target.parentFile?.mkdirs()
-            val tmp = File(target.path + ".part")
-            c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(tmp.path, bounds)
-            if (bounds.outWidth > 0) shrink(tmp)
-            if (bounds.outWidth > 0 && tmp.renameTo(target)) true else { tmp.delete(); false }
-        }
-    } catch (e: Exception) { Log.w(TAG, "$url: $e"); false }
+    private fun download(url: String, target: File, depth: Int = 0): Boolean {
+        return try {
+            val c = open(url)
+            if (c.responseCode != 200) { c.disconnect(); false } else {
+                target.parentFile?.mkdirs()
+                val tmp = File(target.path + ".part")
+                c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(tmp.path, bounds)
+                // libretro-thumbnails keeps some boxarts as symlinks: the file holds the name of the image it stands for
+                if (bounds.outWidth <= 0 && tmp.length() in 1..511 && depth < 3) {
+                    val link = tmp.readText().trim()
+                    tmp.delete()
+                    if ((link.endsWith(".png", true) || link.endsWith(".jpg", true)) && '/' !in link)
+                        return download(url.substringBeforeLast('/') + "/" + URLEncoder.encode(link, "UTF-8").replace("+", "%20"), target, depth + 1)
+                    return false
+                }
+                if (bounds.outWidth > 0) shrink(tmp)
+                if (bounds.outWidth > 0 && tmp.renameTo(target)) true else { tmp.delete(); false }
+            }
+        } catch (e: Exception) { Log.w(TAG, "$url: $e"); false }
+    }
 }

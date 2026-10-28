@@ -1692,6 +1692,8 @@ class MainActivity : ComponentActivity() {
                 // game info (year, genre, developer) for platforms whose metadata is missing or a month old
                 var fetched = false
                 for (sys in retro) {
+                    if (sys.platform.id in com.droiddeck.launcher.frontend.NoIntro.platforms && !com.droiddeck.launcher.frontend.NoIntro.fresh(this, sys.platform.id))
+                        fetched = com.droiddeck.launcher.frontend.NoIntro.fetch(this, sys.platform) || fetched
                     if (sys.platform.id in setOf("mame", "neogeo")) continue
                     if (!com.droiddeck.launcher.frontend.GameInfo.fresh(this, sys.platform.id))
                         fetched = com.droiddeck.launcher.frontend.GameInfo.fetch(this, sys.platform) || fetched

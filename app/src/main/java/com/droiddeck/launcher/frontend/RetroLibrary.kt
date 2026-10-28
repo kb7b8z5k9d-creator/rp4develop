@@ -124,6 +124,7 @@ object RetroLibrary {
         val name = when {
             isArcade -> arcadeTitle(context, stem) ?: stem
             platform == "psp" && file != null -> pspTitle(file) ?: stem
+            platform in NoIntro.platforms && file != null -> NoIntro.name(context, platform, file) ?: stem
             else -> stem
         }
         return name.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "")
@@ -171,7 +172,7 @@ object RetroLibrary {
                 if (known.isNotEmpty()) games.forEach { g -> (known[GameInfo.key(g.hostPath.nameWithoutExtension)] ?: known[GameInfo.key(g.name)])?.let { info[g.hostPath.path] = it } }
             }
             System(platform, folders, games, players, chosen, WallpaperPacks.forPlatform(context, platform), info)
-        }.sortedWith(compareBy({ it.platform.id in arcade }, { it.platform.name.lowercase() }))
+        }.sortedWith(compareBy({ it.platform.id in arcade }, { it.platform.name.lowercase() })).also { NoIntro.save(context) }
     }
 
     /** A RetroArch core the folder is named after ("Arcade - Mame 2003 Plus" -> mame2003_plus), the longest such name. */
