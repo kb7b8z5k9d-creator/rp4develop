@@ -364,6 +364,13 @@ private fun Content(
                     val (sys, g) = pair
                     Rise(0) { Eyebrow(sys.platform.name) }
                     Rise(1) { Title(g.name) }
+                    Rise(1) {
+                        Text(
+                            listOfNotNull(sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
+                                s.retroStats[g.hostPath.path]?.let { playedLine(it) } ?: stringResource(R.string.retro_never_played)).joinToString("   ·   "),
+                            fontSize = 14.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                    }
                     Rise(2) {
                         Row {
                             Column(modifier = Modifier.weight(1f)) {
@@ -375,6 +382,9 @@ private fun Content(
                                         if (player != null) stringResource(R.string.retro_play_in, player.label) else stringResource(R.string.retro_no_player, sys.platform.name),
                                         enabled = player != null, main = true,
                                     ) { a.onRetroGame(sys, g) }
+                                    SecondaryButton(
+                                        if (g.hostPath.path in s.retroFavorites) stringResource(R.string.retro_favorite_on) else stringResource(R.string.retro_favorite_add),
+                                    ) { a.onRetroFavorite(g) }
                                     ActionChip(g.hostPath.extension.uppercase().ifEmpty { stringResource(R.string.content_rom_folder) }, ok = false)
                                 }
                                 Spacer(Modifier.height(10.dp))

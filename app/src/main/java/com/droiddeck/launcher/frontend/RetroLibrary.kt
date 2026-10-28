@@ -24,6 +24,8 @@ object RetroLibrary {
         val player: Platforms.Player?,
         /** The chosen Daijisho wallpaper pack's picture for this platform (WallpaperPacks), or null. */
         val wallpaper: File? = null,
+        /** Year, genre and developer by ROM path, where known (GameInfo; arcade sets from the MAME 2003-Plus metadata). */
+        val info: Map<String, GameInfo.Info> = emptyMap(),
     ) {
         val id: String get() = ID_PREFIX + platform.id
     }
@@ -39,6 +41,24 @@ object RetroLibrary {
     fun extraRoots(context: Context): List<String> =
         prefs(context).getString("roots", "").orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
 
+    /** Folders found on their own (romsDir, "Roms*") that the user took off the list. */
+    private fun hiddenRoots(context: Context): Set<String> =
+        prefs(context).getString("hiddenRoots", "").orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+
+    fun addRoot(context: Context, path: String) {
+        val p = File(path).canonicalPath
+        val hidden = hiddenRoots(context) - p
+        val extra = (extraRoots(context) + p).distinct()
+        prefs(context).edit().putString("roots", extra.joinToString("\n")).putString("hiddenRoots", hidden.joinToString("\n")).apply()
+    }
+
+    fun removeRoot(context: Context, path: String) {
+        val p = File(path).canonicalPath
+        val extra = extraRoots(context).filter { File(it).canonicalPath != p }
+        prefs(context).edit().putString("roots", extra.joinToString("\n"))
+            .putString("hiddenRoots", (hiddenRoots(context) + p).joinToString("\n")).apply()
+    }
+
     /** Storage volumes: internal storage and each SD card or USB drive under /storage. */
     private fun volumes(): List<File> {
         val out = LinkedHashSet<File>()
@@ -51,8 +71,9 @@ object RetroLibrary {
         val out = LinkedHashSet<File>()
         SessionPrefs.romsDir(context).takeIf { it.isNotEmpty() }?.let { out.add(File(it)) }
         for (v in volumes()) v.listFiles()?.filter { it.isDirectory && it.name.lowercase().startsWith("rom") }?.forEach { out.add(it) }
-        extraRoots(context).forEach { out.add(File(it)) }
-        return out.filter { it.isDirectory }.map { it.canonicalFile }.distinct()
+        val hidden = hiddenRoots(context)
+        val found = out.filter { it.isDirectory }.map { it.canonicalFile }.filter { it.path !in hidden }
+        return (found + extraRoots(context).map { File(it) }.filter { it.isDirectory }.map { it.canonicalFile }).distinct()
     }
 
     private val notGames = setOf("srm", "sav", "state", "txt", "nfo", "png", "jpg", "jpeg", "xml", "dat", "rtc", "cfg", "ini", "db", "pdf", "mp4", "pup")
@@ -63,24 +84,48 @@ object RetroLibrary {
 
     private val arcade = setOf("mame", "neogeo", "fbneo", "cps1", "cps2", "cps3", "mame2003", "arcade")
 
-    @Volatile private var arcadeTitles: Map<String, String>? = null
+    private class ArcadeSet(val title: String, val info: GameInfo.Info)
 
-    /** MAME and FinalBurn set names -> titles (assets/retro/arcade-titles.tsv, from the MAME 2003-Plus metadata). */
-    private fun arcadeTitle(context: Context, set: String): String? {
-        val map = arcadeTitles ?: synchronized(this) {
-            arcadeTitles ?: runCatching {
+    @Volatile private var arcadeSets: Map<String, ArcadeSet>? = null
+
+    /** MAME and FinalBurn sets: title, year, maker, genre (assets/retro/arcade-titles.tsv, from the MAME 2003-Plus metadata). */
+    private fun arcadeSet(context: Context, set: String): ArcadeSet? {
+        val map = arcadeSets ?: synchronized(this) {
+            arcadeSets ?: runCatching {
                 context.assets.open("retro/arcade-titles.tsv").bufferedReader().useLines { lines ->
-                    lines.mapNotNull { l -> l.split('\t', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+                    lines.mapNotNull { l ->
+                        val p = l.split('\t')
+                        if (p.size < 2) null else p[0] to ArcadeSet(p[1], GameInfo.Info(
+                            p.getOrNull(2)?.takeIf { it.isNotBlank() }, p.getOrNull(4)?.takeIf { it.isNotBlank() }, p.getOrNull(3)?.takeIf { it.isNotBlank() }))
+                    }.toMap()
                 }
-            }.getOrDefault(emptyMap()).also { arcadeTitles = it }
+            }.getOrDefault(emptyMap()).also { arcadeSets = it }
         }
         return map[set.lowercase()]
     }
 
-    /** The name shown: tags dropped, a release number ("0028 - ") and underscores gone; arcade sets by their title. */
-    private fun displayTitle(context: Context, platform: String, stem: String): String {
+    private fun arcadeTitle(context: Context, set: String): String? = arcadeSet(context, set)?.title
+
+    private val pspTitles = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** A PSP ISO's own title (PARAM.SFO), remembered by path, size and date. */
+    private fun pspTitle(file: File): String? {
+        if (file.extension.lowercase() != "iso") return null
+        val key = "${file.path}|${file.length()}|${file.lastModified()}"
+        pspTitles[key]?.let { return it.ifEmpty { null } }
+        val title = PspIso.read(file)?.title?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+        pspTitles[key] = title
+        return title.ifEmpty { null }
+    }
+
+    /** The name shown: tags dropped, a release number ("0028 - ") and underscores gone; arcade sets and PSP discs by their own title. */
+    private fun displayTitle(context: Context, platform: String, stem: String, file: File? = null): String {
         val isArcade = platform in arcade
-        val name = if (isArcade) arcadeTitle(context, stem) ?: stem else stem
+        val name = when {
+            isArcade -> arcadeTitle(context, stem) ?: stem
+            platform == "psp" && file != null -> pspTitle(file) ?: stem
+            else -> stem
+        }
         return name.replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "")
             .let { if (isArcade) it else it.replace(Regex("^\\d{3,4}\\s*-\\s*"), "") }
             .replace('_', ' ').replace(Regex("\\s+"), " ").trim().ifEmpty { stem }
@@ -100,7 +145,7 @@ object RetroLibrary {
                 !(ext == "zip" && f.nameWithoutExtension.lowercase() in biosSets) &&
                 !(f.name.lowercase() in named && sheets.none { it == f })
         }.sortedBy { it.name.lowercase() }.map { f ->
-            val rom = Library.Rom(displayTitle(context, platform.id, f.nameWithoutExtension), f, f.absolutePath, ID_PREFIX + platform.id)
+            val rom = Library.Rom(displayTitle(context, platform.id, f.nameWithoutExtension, f), f, f.absolutePath, ID_PREFIX + platform.id)
             CoverArt.cached(context, rom)?.let { Library.Rom(rom.name, rom.hostPath, rom.guestPath, rom.emulatorId, it) } ?: rom
         }
     }
@@ -118,8 +163,15 @@ object RetroLibrary {
             val players = Platforms.installedPlayers(context, platform).filter { AndroidLaunch.usable(it) }
             val chosen = playerId(context, id)?.let { pid -> players.firstOrNull { it.id == pid } } ?: byFolderName(players, folders) ?: players.firstOrNull()
             val games = folders.flatMap { games(context, platform, chosen, it) }
-            if (games.isEmpty()) null else System(platform, folders, games, players, chosen, WallpaperPacks.forPlatform(context, platform))
-        }.sortedBy { it.platform.name.lowercase() }
+            if (games.isEmpty()) return@mapNotNull null
+            val info = HashMap<String, GameInfo.Info>()
+            if (id in arcade) games.forEach { g -> arcadeSet(context, g.hostPath.nameWithoutExtension)?.let { info[g.hostPath.path] = it.info } }
+            else {
+                val known = GameInfo.load(context, id)
+                if (known.isNotEmpty()) games.forEach { g -> (known[GameInfo.key(g.hostPath.nameWithoutExtension)] ?: known[GameInfo.key(g.name)])?.let { info[g.hostPath.path] = it } }
+            }
+            System(platform, folders, games, players, chosen, WallpaperPacks.forPlatform(context, platform), info)
+        }.sortedWith(compareBy({ it.platform.id in arcade }, { it.platform.name.lowercase() }))
     }
 
     /** A RetroArch core the folder is named after ("Arcade - Mame 2003 Plus" -> mame2003_plus), the longest such name. */

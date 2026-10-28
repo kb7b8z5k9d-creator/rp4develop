@@ -2388,5 +2388,16 @@
     <string name="retro_grid_view">Grid view</string>
     <string name="retro_items">%1$d items</string>
     <string name="retro_gallery_keys">Ⓐ Select   Ⓑ Back</string>
+    <string name="retro_paths_title">ROM folders</string>
+    <string name="retro_paths_hint">Each folder holds one folder per system (snes, gba, psx…). Folders named Roms at the top of internal storage and SD cards are found on their own.</string>
+    <string name="retro_add_folder">Add folder</string>
+    <string name="retro_remove">Remove</string>
+    <string name="retro_recent">%1$d recent</string>
+    <string name="retro_favorites">%1$d favorite</string>
+    <string name="retro_favorite_add">☆ Favorite</string>
+    <string name="retro_favorite_on">★ Favorite</string>
+    <string name="retro_played">Last played %1$s · Played %2$d times</string>
+    <string name="retro_never_played">Not played yet</string>
+    <string name="retro_pick_folder">Choose a ROM folder</string>
     <string name="retro_credit">Systems and emulator launch settings from Daijishō (MIT)</string>
 </resources>

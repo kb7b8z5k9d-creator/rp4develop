@@ -73,15 +73,16 @@ object CoverArt {
     }
 
     private fun findUrl(context: Context, rom: Library.Rom): String? {
-        val name = rom.hostPath.nameWithoutExtension.removeSuffix(".dec")
-        for (collection in collectionsOf(context, rom.emulatorId).orEmpty()) {
+        val fileName = rom.hostPath.nameWithoutExtension.removeSuffix(".dec")
+        // the file's name, then the name shown (a PSP disc's own title, an arcade set's title)
+        for (name in listOf(fileName, rom.name).distinct()) for (collection in collectionsOf(context, rom.emulatorId).orEmpty()) {
             val exact = thumbnailUrl(collection, name)
             if (exists(exact)) return exact
             nearest(name, names(context, collection))?.let { return thumbnailUrl(collection, it) }
         }
         return when (rom.emulatorId) {
-            "armsx2" -> ps2Serial(rom.hostPath)?.let { "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default/$it.jpg" }
-            "dolphin" -> nintendoDiscId(rom.hostPath)?.let { id ->
+            "armsx2", "android:ps2" -> ps2Serial(rom.hostPath)?.let { "https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default/$it.jpg" }
+            "dolphin", "android:gc", "android:wii" -> nintendoDiscId(rom.hostPath)?.let { id ->
                 val region = when (id.getOrNull(3)) { 'P' -> "EN"; 'J' -> "JA"; 'K' -> "KO"; else -> "US" }
                 "https://art.gametdb.com/wii/cover/$region/$id.png"
             }
@@ -185,7 +186,8 @@ object CoverArt {
     }
 
     private fun nintendoDiscId(file: File): String? {
-        val offset = when (file.extension.lowercase()) { "iso", "gcm" -> 0L; "wbfs" -> 0x200L; else -> return null }
+        // RVZ/WIA keep a copy of the disc header 0x10 into their second header, which starts at 0x48
+        val offset = when (file.extension.lowercase()) { "iso", "gcm" -> 0L; "wbfs" -> 0x200L; "rvz", "wia" -> 0x58L; else -> return null }
         RandomAccessFile(file, "r").use { f ->
             val b = ByteArray(6); f.seek(offset); f.readFully(b)
             val id = String(b, Charsets.US_ASCII)
@@ -212,6 +214,46 @@ object CoverArt {
         if (c.responseCode != 200) { c.disconnect(); null } else c.inputStream.bufferedReader().use { it.readText() }
     } catch (e: Exception) { Log.w(TAG, "$url: $e"); null }
 
+    private const val MAX_SIDE = 600
+    private const val SHRINK_OVER = 200_000L
+
+    /**
+     * Box art as the pages show it: libretro's scans run to several MB; anything over 200 KB is redrawn at most 600 px
+     * on its long side as WebP (alpha kept). True when the file was rewritten.
+     */
+    fun shrink(file: File): Boolean {
+        if (file.length() <= SHRINK_OVER) return false
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.path, bounds)
+            val long = maxOf(bounds.outWidth, bounds.outHeight)
+            if (long <= 0) return false
+            var sample = 1
+            while (long / (sample * 2) >= MAX_SIDE) sample *= 2
+            val decoded = BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return false
+            val scale = MAX_SIDE.toFloat() / maxOf(decoded.width, decoded.height)
+            val bmp = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt().coerceAtLeast(1),
+                (decoded.height * scale).toInt().coerceAtLeast(1), true) else decoded
+            val tmp = File(file.path + ".small")
+            val format = if (android.os.Build.VERSION.SDK_INT >= 30) android.graphics.Bitmap.CompressFormat.WEBP_LOSSY
+                else @Suppress("DEPRECATION") android.graphics.Bitmap.CompressFormat.WEBP
+            val ok = tmp.outputStream().use { bmp.compress(format, 85, it) }
+            if (bmp !== decoded) bmp.recycle()
+            decoded.recycle()
+            if (ok && tmp.length() in 1 until file.length()) tmp.renameTo(file) else { tmp.delete(); false }
+        } catch (e: Exception) { Log.w(TAG, "shrink ${file.name}: $e"); false }
+    }
+
+    /** Shrinks the covers already cached for the given emulator ids' prefix (the Retro page's: "android:"); count rewritten. */
+    fun shrinkCached(context: Context, prefix: String): Int {
+        var n = 0
+        root(context).listFiles()?.filter { it.isDirectory && it.name.startsWith(prefix) }?.forEach { d ->
+            d.listFiles()?.filter { it.isFile && it.name.endsWith(".img") }?.forEach { if (shrink(it)) n++ }
+        }
+        if (n > 0) Log.i(TAG, "shrank $n covers")
+        return n
+    }
+
     private fun download(url: String, target: File): Boolean = try {
         val c = open(url)
         if (c.responseCode != 200) { c.disconnect(); false } else {
@@ -220,6 +262,7 @@ object CoverArt {
             c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeFile(tmp.path, bounds)
+            if (bounds.outWidth > 0) shrink(tmp)
             if (bounds.outWidth > 0 && tmp.renameTo(target)) true else { tmp.delete(); false }
         }
     } catch (e: Exception) { Log.w(TAG, "$url: $e"); false }

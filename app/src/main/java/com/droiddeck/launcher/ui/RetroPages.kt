@@ -78,15 +78,21 @@ import kotlinx.coroutines.launch
 internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (String) -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     var picker by remember { mutableStateOf(false) }
+    var paths by remember { mutableStateOf(false) }
     Column(modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.retro_title), fontSize = 28.sp, fontWeight = FontWeight.Black, color = colors.onBackground)
             Chip(stringResource(R.string.retro_games_count, s.retro.sumOf { it.games.size }), ok = false)
             Spacer(Modifier.weight(1f))
+            SecondaryButton(stringResource(R.string.retro_paths), compact = true) { paths = !paths; picker = false }
             SecondaryButton(s.retroPack ?: stringResource(R.string.retro_wallpapers), compact = true) {
-                picker = !picker
+                picker = !picker; paths = false
                 if (picker) a.onRetroWallpaperList()
             }
+        }
+        if (paths) {
+            RootsPanel(s, a, Modifier.weight(1f).padding(top = 12.dp))
+            return@Column
         }
         if (picker) {
             WallpaperPicker(s, a, Modifier.weight(1f).padding(top = 12.dp)) { picker = false }
@@ -181,6 +187,24 @@ private fun FannedCovers(games: List<Library.Rom>, modifier: Modifier) {
 }
 
 @Composable
+private fun RootsPanel(s: FrontEndState, a: FrontEndActions, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Column(modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.retro_paths_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.onBackground)
+        Text(stringResource(R.string.retro_paths_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp))
+        LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth()) {
+            itemsIndexed(s.retroRoots) { _, path ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text(path, fontSize = 14.sp, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    SecondaryButton(stringResource(R.string.retro_remove), compact = true) { a.onRetroRemoveRoot(path) }
+                }
+            }
+        }
+        Box(Modifier.padding(top = 10.dp)) { PrimaryButton(stringResource(R.string.retro_add_folder), compact = true) { a.onRetroAddRoot() } }
+    }
+}
+
+@Composable
 private fun WallpaperPicker(s: FrontEndState, a: FrontEndActions, modifier: Modifier, onDone: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Column(modifier.fillMaxWidth()) {
@@ -214,6 +238,12 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
     var listView by rememberSaveable { mutableStateOf(false) }
     var showPlayers by remember { mutableStateOf(false) }
     var focusedIndex by remember(id) { mutableStateOf<Int?>(null) }
+    var filter by rememberSaveable(id) { mutableStateOf(0) } // 0 all, 1 recent, 2 favourites
+    val recent = remember(sys.games, s.retroStats) {
+        sys.games.withIndex().filter { s.retroStats[it.value.hostPath.path] != null }.sortedByDescending { s.retroStats[it.value.hostPath.path]?.last ?: 0L }
+    }
+    val favorites = remember(sys.games, s.retroFavorites) { sys.games.withIndex().filter { it.value.hostPath.path in s.retroFavorites } }
+    val shown = when (filter) { 1 -> recent; 2 -> favorites; else -> sys.games.withIndex().toList() }
     Column(modifier.fillMaxSize()) {
         Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -221,19 +251,21 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
         ) {
             Text(sys.platform.name, fontSize = 22.sp, fontWeight = FontWeight.Black, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 360.dp))
             SecondaryButton(if (listView) stringResource(R.string.retro_grid_view) else stringResource(R.string.retro_list_view), compact = true) { listView = !listView }
-            Chip(stringResource(R.string.retro_items, sys.games.size), ok = false)
+            FilterChip(stringResource(R.string.retro_items, sys.games.size), filter == 0) { filter = 0 }
+            FilterChip(stringResource(R.string.retro_recent, recent.size), filter == 1) { filter = if (filter == 1) 0 else 1 }
+            FilterChip(stringResource(R.string.retro_favorites, favorites.size), filter == 2) { filter = if (filter == 2) 0 else 2 }
             SecondaryButton(sys.player?.label ?: stringResource(R.string.retro_emulator), compact = true) { showPlayers = !showPlayers }
         }
         if (showPlayers) Box(Modifier.padding(horizontal = 18.dp).padding(bottom = 8.dp)) { RetroPlayerPicker(sys, a) }
         val open: (Int) -> Unit = { i -> onSelect("rgame:${sys.platform.id}:$i") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (listView) LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-                itemsIndexed(sys.games) { i, g -> GalleryRow(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
+                itemsIndexed(shown) { _, (i, g) -> GalleryRow(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
             } else LazyVerticalGrid(
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
             ) {
-                itemsIndexed(sys.games) { i, g -> GalleryCell(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
+                itemsIndexed(shown) { _, (i, g) -> GalleryCell(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
             }
         }
         val g = focusedIndex?.let { sys.games.getOrNull(it) }
@@ -242,13 +274,25 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
             modifier = Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 18.dp, vertical = 8.dp),
         ) {
             Text(
-                if (g != null) listOfNotNull(g.name, g.hostPath.extension.uppercase().takeIf { it.isNotEmpty() }, sys.player?.label).joinToString(" · ")
+                if (g != null) listOfNotNull(
+                    g.name, sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
+                    s.retroStats[g.hostPath.path]?.let { st -> playedLine(st) },
+                ).joinToString(" · ")
                 else listOfNotNull(sys.platform.name, sys.player?.label).joinToString(" · "),
                 fontSize = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
             Text(stringResource(R.string.retro_gallery_keys), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.onBackground)
         }
     }
+}
+
+@Composable
+internal fun playedLine(st: com.droiddeck.launcher.frontend.RetroStats.Stat): String =
+    stringResource(R.string.retro_played, android.text.format.DateUtils.getRelativeTimeSpanString(st.last).toString(), st.count)
+
+@Composable
+private fun FilterChip(text: String, on: Boolean, onClick: () -> Unit) {
+    if (on) PrimaryButton(text, compact = true) { onClick() } else SecondaryButton(text, compact = true) { onClick() }
 }
 
 @Composable

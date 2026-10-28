@@ -32,6 +32,8 @@ object Platforms {
         val id: String, val name: String, val shortname: String, val accept: Regex?,
         /** The libretro-thumbnails repository, "Nintendo_-_Game_Boy_Advance" */
         val collection: String?,
+        /** The libretro-database system name, "Nintendo - Game Boy Advance" */
+        val libretroName: String?,
         val players: List<Player>,
     )
 
@@ -52,14 +54,14 @@ object Platforms {
                 val p = j.getJSONObject("platform")
                 val sources = p.optJSONArray("scraperSourceList")
                 val libretro = (0 until (sources?.length() ?: 0)).map { sources!!.getString(it) }
-                    .firstOrNull { it.startsWith("LIBRETRO:") }?.removePrefix("LIBRETRO:")?.trim()?.replace(' ', '_')
+                    .firstOrNull { it.startsWith("LIBRETRO:") }?.removePrefix("LIBRETRO:")?.trim()
                 val list = j.optJSONArray("playerList")
                 val players = (0 until (list?.length() ?: 0)).map { i ->
                     val o = list!!.getJSONObject(i)
                     Player(o.optString("uniqueId"), o.optString("name"), o.optString("amStartArguments"), regex(o.optString("acceptedFilenameRegex")))
                 }.filter { it.pkg != null }
                 Platform(p.getString("uniqueId"), p.getString("name"), p.optString("shortname", p.getString("uniqueId")),
-                    regex(p.optString("acceptedFilenameRegex")), libretro, players)
+                    regex(p.optString("acceptedFilenameRegex")), libretro?.replace(' ', '_'), libretro, players)
             }.onFailure { Log.w(TAG, "$file: $it") }.getOrNull()
         }
     }
