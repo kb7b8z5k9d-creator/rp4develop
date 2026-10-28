@@ -241,4 +241,4 @@ checksum names from [libretro-database](https://github.com/libretro/libretro-dat
 the [MAME 2003-Plus](https://github.com/libretro/mame2003-plus-libretro) metadata.
 
 The debugging itself (probes, shader bisection, the apitrace replay and the patches) was done with Claude
-(Anthropic) driving the device over adb under yujikaido's direction; the write-ups are in the pull requests.
+(Anthropic) driving the device over adb under under my direction; the write-ups are in the pull requests.
