@@ -12,6 +12,26 @@ Claude Code, so they live on the fork branches below instead. Maintainers are we
 Tested on one Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
 
+## Coming soon
+
+The current download is still fix14 on v0.5.4. The next build is being tested on my RP4 Pro now, and I'll post
+it once it holds up in real play:
+
+- **Rebased on DroidDeck Mali v0.5.4.1.** The bridge fixes now sit on top of ASEbrahim's v0.5.4.1 release. Steam,
+  Ys I, Ys Origin's rooms and sleep/resume have been checked on it.
+- **A Retro tab.** A Daijishō-style front end for emulators, built into DroidDeck: a carousel of systems with
+  Daijishō's wallpapers, then each system's games as a box-art grid or as a list with a screenshot of the
+  selected game. It picks up your existing `Roms` folders on internal storage and the SD card. Covers,
+  screenshots and game info (genre, year, developer) come from libretro's databases, and PSP, GameCube and
+  cartridge games are named from the disc or a checksum rather than the file name. Each system has a Settings
+  panel where you choose its emulator (RetroArch cores, PPSSPP, Dolphin, DraStic and so on) and see its
+  folders. It also has favorites, recently played, and L1/R1 to jump between systems.
+- **An opt-in cached memory switch** for games that write to GPU memory one byte at a time (see Device tips).
+  It's off unless you turn it on for a game.
+
+Since the app itself is now built from source rather than patched, the next APK replaces the whole app. The
+signing key is the same personal debug key, so it installs over fix14.
+
 ## What is fixed
 
 | Problem on the stock v0.5.4 | Cause | Fix |
@@ -64,7 +84,7 @@ game you try; "Playable" means a full session without crashes or rendering fault
 | Game | Install | Status | FPS | Notes |
 |---|---|---|---|---|
 | Teenage Mutant Ninja Turtles: Shredder's Revenge | SD card | Playable | 60 average | D3D11 via DXVK, 1280x720, frame generation on; about 20 s black screen at start while shaders compile (normal) |
-| Ys Origin | SD card | Playable | 60-69 in rooms, 61 title | D3D8 32-bit; white rooms fixed by `nan_position`; refractive floors 50-60; Win-FG 2x and LSFG 2x (fix14) work |
+| Ys Origin | SD card | Playable | 60-69 in rooms, 61 title | D3D9 32-bit; white rooms fixed by `nan_position`; refractive floors 50-60; Win-FG 2x and LSFG 2x (fix14) work |
 | Ys I & II Chronicles+ (Ys I) | SD card | Playable | 60 field and dialog | D3D9 via DXVK plus Zink; dialog scenes ran at 5-11 fps until the FEX preset for this game was set to **Performance** (TSO off), see Device tips |
 | | | | | |
 | | | | | |
@@ -89,7 +109,7 @@ author's. Because of that:
 
 | Part | Built from |
 |---|---|
-| `lib/arm64-v8a/libvkbridge_server.so`, `libvkbridge_jni.so` | MaliBridge, branch `rp4pro-fixes` (4 commits on v0.5.4) |
+| `lib/arm64-v8a/libvkbridge_server.so`, `libvkbridge_jni.so` | MaliBridge, the 4 fixes on v0.5.4 (kept as branch `rp4pro-fixes-v054`) |
 | `lib/arm64-v8a/libdroiddeckwayland.so` | DroidDeck's compositor from the author's `mali-test-build` branch + `patches/compositor-fix7-fork-b3006a8a.patch` + `patches/compositor-fix13-winfg-waits.patch` + `patches/compositor-fix14-lsfg-vk11.patch` |
 | `assets/linuxfs/libblsession.so` | DroidDeck preload, branch `rp4pro-noexec-arm64ec` |
 
@@ -125,15 +145,19 @@ Settings on the device itself, not in the APK, that cost an evening to find:
   FEX's x86 memory-ordering emulation (TSO) makes every byte a store-release into the bridge's uncached shared
   memory, about 170 ms a frame. Set that game's FEX preset to **Performance** (TSO off) in its game profile; it
   is a per-game setting, nothing else changes. Old single-threaded games take it well; games with
-  lock-free threading may not, so try it per game. A bridge-side fix (a cached memory type with its own cache
-  maintenance) is being looked at, since DXVK never flushes host memory itself.
+  lock-free threading may not, so try it per game. The next build adds a second option for games that need TSO
+  kept on: `VKBRIDGE_CACHED_UPLOAD=1` in that game's bridge preset gives it cached memory, and the bridge does
+  the cache cleaning itself, since DXVK never flushes host memory. It's off by default and has a memory budget
+  (`VKBRIDGE_CACHED_UPLOAD_MB`, 64 MB). For Ys I, TSO off is still the better fix.
 
 ## Source and commit history
 
 This repository holds the build, the write-ups and the evidence. The code changes themselves, with their
 history, are on branches of the two forks, where each commit is one fix with its reasoning in the message:
 
-**[yujikaido/MaliBridge](https://github.com/yujikaido/MaliBridge/commits/rp4pro-fixes), branch `rp4pro-fixes`** (on v0.5.4)
+**[yujikaido/MaliBridge](https://github.com/yujikaido/MaliBridge/commits/rp4pro-fixes), branch `rp4pro-fixes`**
+(now on v0.5.4.1; the v0.5.4 version that fix14 was built from is kept as `rp4pro-fixes-v054`). PR
+[ASEbrahim/MaliBridge#35](https://github.com/ASEbrahim/MaliBridge/pull/35) was updated to the v0.5.4.1 base.
 
 | Date | Commit |
 |---|---|
@@ -141,6 +165,8 @@ history, are on branches of the two forks, where each commit is one fix with its
 | 2026-10-26 | server: linear images under the AHardwareBuffer memory strategy (twin images, linear tiling hidden) |
 | 2026-10-27 | server: VKBRIDGE_AHB_RARELY from the env file; driver-module SPIR-V substitution (the shader bisection tool) |
 | 2026-10-27 | server: nan_position (MK-45), vertex positions guarded on Mali-G77 r32p1 (the white rooms) |
+| 2026-10-28 | server: cached upload memory (VKBRIDGE_CACHED_UPLOAD, opt-in, per game) |
+| 2026-10-28 | server: cached upload per process, coalesced cleans |
 
 **[yujikaido/DroidDeck](https://github.com/yujikaido/DroidDeck/branches), branches `rp4pro-noexec-arm64ec`, `rp4pro-framegen-session-reset` and `rp4pro-lsfg-vk11`**
 
