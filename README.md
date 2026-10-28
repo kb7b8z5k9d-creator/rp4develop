@@ -65,6 +65,7 @@ game you try; "Playable" means a full session without crashes or rendering fault
 |---|---|---|---|---|
 | Teenage Mutant Ninja Turtles: Shredder's Revenge | SD card | Playable | 60 average | D3D11 via DXVK, 1280x720, frame generation on; about 20 s black screen at start while shaders compile (normal) |
 | Ys Origin | SD card | Playable | 60-69 in rooms, 61 title | D3D8 32-bit; white rooms fixed by `nan_position`; refractive floors 50-60; Win-FG 2x and LSFG 2x (fix14) work |
+| Ys I & II Chronicles+ (Ys I) | SD card | Playable | 60 field and dialog | D3D9 via DXVK plus Zink; dialog scenes ran at 5-11 fps until the FEX preset for this game was set to **Performance** (TSO off), see Device tips |
 | | | | | |
 | | | | | |
 | | | | | |
@@ -105,6 +106,27 @@ DroidDeck branches for `main`.
   than 70.
 - The `nan_position` erratum is switched on by driver version (r32). It needs a startup probe before it can
   be offered to every Mali.
+- Any game that writes to locked GPU memory with FEX TSO on pays the store-release cost on this driver's
+  uncached shared memory (see Device tips). The per-game FEX preset is the workaround for now.
+
+## Device tips
+
+Settings on the device itself, not in the APK, that cost an evening to find:
+
+- **Home needs two presses to open the Steam menu.** Retroid's own "prevent accidental Home press" setting
+  swallows the first press (system setting `prevent_press_home_accidentally`). Turn it off in Retroid's Settings,
+  or from a PC: `adb shell settings put system prevent_press_home_accidentally 0`. One press then opens the Steam
+  menu when DroidDeck is the home app.
+- **No quick-access panel (the three dots in DroidDeck's side panel, Back double-tap, hold Back + X).** In
+  DroidDeck's controller settings, set **Steam controller** to **Steam Deck**. As Xbox 360 the pad has no
+  quick-access button and the app's chord fallback does nothing. Applies at the next Steam session.
+- **A game crawls in menus or dialog scenes while its main thread sits at 100% CPU.** Seen in Ys I & II
+  Chronicles+: the game converts a paletted 640x480 image into a locked Direct3D surface one byte at a time, and
+  FEX's x86 memory-ordering emulation (TSO) makes every byte a store-release into the bridge's uncached shared
+  memory, about 170 ms a frame. Set that game's FEX preset to **Performance** (TSO off) in its game profile; it
+  is a per-game setting, nothing else changes. Old single-threaded games take it well; games with
+  lock-free threading may not, so try it per game. A bridge-side fix (a cached memory type with its own cache
+  maintenance) is being looked at, since DXVK never flushes host memory itself.
 
 ## Source and commit history
 
