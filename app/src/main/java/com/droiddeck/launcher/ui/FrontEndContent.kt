@@ -330,7 +330,7 @@ private fun Content(
                 Rise(0) { PageHeader(stringResource(R.string.retro_title)) { Chip(stringResource(R.string.retro_games_count, s.retro.sumOf { it.games.size }), ok = false) } }
                 if (s.retro.isEmpty()) Rise(3) { Note(stringResource(R.string.retro_empty)) }
                 s.retro.forEachIndexed { n, sys ->
-                    Rise(2 + n) { SectionTitle(sys.platform.name, listOfNotNull(sys.games.size.toString(), sys.player?.label).joinToString(" · ")) }
+                    Rise(2 + n) { SectionTitle(sys.platform.name, sys.games.size.toString()) }
                     Rise(2 + n, Modifier.fillMaxWidth()) {
                         Column {
                             ArtGrid(sys.games.take(RETRO_SHELF).mapIndexed { index, g -> retroTile(sys, index, g, density, onSelect) })
@@ -379,7 +379,7 @@ private fun Content(
                                 Actions {
                                     val player = sys.player
                                     PrimaryButton(
-                                        if (player != null) stringResource(R.string.retro_play_in, player.label) else stringResource(R.string.retro_no_player, sys.platform.name),
+                                        if (player != null) stringResource(R.string.retro_play) else stringResource(R.string.retro_no_player, sys.platform.name),
                                         enabled = player != null, main = true,
                                     ) { a.onRetroGame(sys, g) }
                                     SecondaryButton(
@@ -387,8 +387,6 @@ private fun Content(
                                     ) { a.onRetroFavorite(g) }
                                     ActionChip(g.hostPath.extension.uppercase().ifEmpty { stringResource(R.string.content_rom_folder) }, ok = false)
                                 }
-                                Spacer(Modifier.height(10.dp))
-                                RetroPlayerPicker(sys, a)
                             }
                             if (!narrow) Poster(g.art, g.name, Modifier.width(detailPosterWidth))
                         }

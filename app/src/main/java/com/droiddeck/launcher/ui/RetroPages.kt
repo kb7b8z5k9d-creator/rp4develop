@@ -170,7 +170,7 @@ private fun PlatformCard(
     sys: RetroLibrary.System, index: Int, count: Int, a: FrontEndActions, onSelect: (String) -> Unit, modifier: Modifier,
     library: FocusRequester, onFocused: () -> Unit,
 ) {
-    var paths by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(false) }
     Box(
         modifier.shadow(18.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp))
             .background(artBrush(hueOf(sys.platform.name)))
@@ -183,10 +183,17 @@ private fun PlatformCard(
         Column(Modifier.align(Alignment.BottomStart).padding(22.dp).widthIn(max = 460.dp)) {
             Text(sys.platform.name, fontSize = 34.sp, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                stringResource(R.string.retro_card_line, sys.games.size, index + 1, count) + (sys.player?.let { " · " + it.label } ?: ""),
+                stringResource(R.string.retro_card_line, sys.games.size, index + 1, count),
                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
             )
-            if (paths) Text(sys.folders.joinToString("\n") { it.path }, fontSize = 12.sp, color = Color.White, modifier = Modifier.padding(bottom = 10.dp))
+            // the system's settings: which emulator plays it, and the folders its games come from
+            if (settings) Column(
+                Modifier.padding(bottom = 10.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).padding(12.dp),
+            ) {
+                RetroPlayerPicker(sys, a)
+                Text(stringResource(R.string.retro_paths_title), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+                Text(sys.folders.joinToString("\n") { it.path }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 PrimaryButton(stringResource(R.string.retro_library), compact = true, icon = Icons.Outlined.PlayArrow, modifier = Modifier.focusRequester(library)) {
                     RetroNav.lastPlatform = sys.platform.id
@@ -194,7 +201,7 @@ private fun PlatformCard(
                     onSelect("rsys:${sys.platform.id}")
                 }
                 SecondaryButton(stringResource(R.string.retro_random), compact = true) { if (sys.games.isNotEmpty()) a.onRetroGame(sys, sys.games.random()) }
-                SecondaryButton(stringResource(R.string.retro_paths), compact = true) { paths = !paths }
+                SecondaryButton(stringResource(R.string.retro_settings), compact = true) { settings = !settings }
             }
         }
     }
@@ -267,7 +274,6 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
         return
     }
     var listView by rememberSaveable { mutableStateOf(false) }
-    var showPlayers by remember { mutableStateOf(false) }
     var focusedIndex by remember(id) { mutableStateOf<Int?>(null) }
     var filter by rememberSaveable(id) { mutableStateOf(0) } // 0 all, 1 recent, 2 favourites
     val recent = remember(sys.games, s.retroStats) {
@@ -301,9 +307,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
             FilterChip(stringResource(R.string.retro_items, sys.games.size), filter == 0) { filter = 0 }
             FilterChip(stringResource(R.string.retro_recent, recent.size), filter == 1) { filter = if (filter == 1) 0 else 1 }
             FilterChip(stringResource(R.string.retro_favorites, favorites.size), filter == 2) { filter = if (filter == 2) 0 else 2 }
-            SecondaryButton(sys.player?.label ?: stringResource(R.string.retro_emulator), compact = true) { showPlayers = !showPlayers }
         }
-        if (showPlayers) Box(Modifier.padding(horizontal = 18.dp).padding(bottom = 8.dp)) { RetroPlayerPicker(sys, a) }
         val open: (Int) -> Unit = { i -> onSelect("rgame:${sys.platform.id}:$i") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (listView) Row(Modifier.fillMaxSize()) {
@@ -339,7 +343,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
                     g.name, sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
                     s.retroStats[g.hostPath.path]?.let { st -> playedLine(st) },
                 ).joinToString(" · ")
-                else listOfNotNull(sys.platform.name, sys.player?.label).joinToString(" · "),
+                else sys.platform.name,
                 fontSize = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )
             Text(stringResource(R.string.retro_gallery_keys), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.onBackground)
