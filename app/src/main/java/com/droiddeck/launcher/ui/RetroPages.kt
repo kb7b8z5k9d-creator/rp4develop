@@ -111,14 +111,8 @@ internal fun PlatformCard(
                 stringResource(R.string.retro_card_line, sys.games.size, index + 1, count),
                 fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f), modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
             )
-            // the system's settings: which emulator plays it, and the folders its games come from
-            if (settings) Column(
-                Modifier.padding(bottom = 10.dp).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).padding(12.dp),
-            ) {
-                RetroPlayerPicker(sys, a)
-                Text(stringResource(R.string.retro_paths_title), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
-                Text(sys.folders.joinToString("\n") { it.path }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
-            }
+            // the system's settings: which emulator plays it (its folders are listed in the same pop-up)
+            if (settings) RetroEmulatorDialog(sys, a) { settings = false }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 PrimaryButton(stringResource(R.string.retro_library), compact = true, icon = Icons.Outlined.PlayArrow, modifier = Modifier.focusRequester(library)) {
                     RetroNav.lastPlatform = sys.platform.id
@@ -144,40 +138,6 @@ private fun FannedCovers(games: List<Library.Rom>, modifier: Modifier) {
                 model = g.art, contentDescription = null, contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxHeight(0.86f).aspectRatio(0.72f)
                     .graphicsLayer { rotationZ = angles[k]; translationX = shifts[k].dp.toPx(); shadowElevation = 16.dp.toPx() },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun RootsPanel(s: FrontEndState, a: FrontEndActions, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    Column(modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.retro_paths_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
-        s.retroRoots.forEach { path ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(path, fontSize = 14.sp, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                SecondaryButton(stringResource(R.string.retro_remove), compact = true) { a.onRetroRemoveRoot(path) }
-            }
-        }
-        Box(Modifier.padding(top = 10.dp)) { PrimaryButton(stringResource(R.string.retro_add_folder), compact = true) { a.onRetroAddRoot() } }
-    }
-}
-
-@Composable
-internal fun WallpaperPicker(s: FrontEndState, a: FrontEndActions, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    LaunchedEffect(Unit) { a.onRetroWallpaperList() }
-    Column(modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.retro_wallpapers_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-        if (s.retroPackBusy != null) Text(stringResource(R.string.retro_wallpapers_busy, s.retroPackBusy), fontSize = 13.sp, color = colors.onBackground, modifier = Modifier.padding(bottom = 8.dp))
-        (listOf<String?>(null) + s.retroPacks).forEach { name ->
-            val label = name ?: stringResource(R.string.retro_wallpapers_none)
-            val chosen = name == s.retroPack
-            Text(
-                (if (chosen) "● " else "") + label, fontSize = 15.sp, fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal, color = colors.onBackground,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = s.retroPackBusy == null) { a.onRetroWallpaperPack(name) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
             )
         }
     }

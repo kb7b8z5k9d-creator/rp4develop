@@ -117,22 +117,10 @@ internal fun RetroStart(s: FrontEndState, a: FrontEndActions, modifier: Modifier
 
 private val RETRO_SECTIONS = listOf("emulators", "paths", "wallpapers")
 
-private fun sectionLabel(section: String) = when (section) {
+internal fun sectionLabel(section: String) = when (section) {
     "emulators" -> R.string.retro_emulators
-    "paths" -> R.string.retro_paths
+    "paths" -> R.string.retro_paths_title
     else -> R.string.retro_wallpapers
-}
-
-/** One part of Retro's settings: each system's emulator, the ROM folders, or the wallpaper pack. */
-@Composable
-internal fun RetroSettingsSection(s: FrontEndState, a: FrontEndActions, section: String) {
-    when (section) {
-        "emulators" ->
-            if (s.retro.isEmpty()) Note(stringResource(R.string.retro_empty))
-            else s.retro.forEach { sys -> SettingsGroup(sys.platform.name) { RetroPlayerPicker(sys, a) } }
-        "paths" -> SettingsGroup(stringResource(R.string.retro_paths_title)) { RootsPanel(s, a) }
-        else -> SettingsGroup(stringResource(R.string.retro_wallpapers)) { WallpaperPicker(s, a) }
-    }
 }
 
 /**
@@ -209,11 +197,7 @@ internal fun RetroMode(s: FrontEndState, a: FrontEndActions, onExit: () -> Unit)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.fillMaxSize().focusProperties { enter = { if (gallery != null) FocusRequester.Cancel else FocusRequester.Default } }.focusGroup()) {
                 if (tab == 1) {
-                    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 8.dp)) {
-                        RETRO_SECTIONS.forEach { RetroSettingsSection(s, a, it) }
-                        Text(stringResource(R.string.retro_credit), fontSize = 11.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
-                    }
-                    KeysBar(stringResource(R.string.retro_settings_keys))
+                    RetroSettingsPage(s, a, Modifier.weight(1f).fillMaxWidth())
                 } else if (count == 0) {
                     Box(Modifier.weight(1f).padding(22.dp)) { Note(stringResource(R.string.retro_empty)) }
                     KeysBar(stringResource(R.string.retro_mode_keys))
@@ -328,7 +312,7 @@ private fun SystemsStrip(
 }
 
 @Composable
-private fun KeysBar(keys: String) {
+internal fun KeysBar(keys: String) {
     val colors = MaterialTheme.colorScheme
     Row(Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 18.dp, vertical = 7.dp)) {
         Spacer(Modifier.weight(1f))
