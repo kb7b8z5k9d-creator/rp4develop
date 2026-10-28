@@ -54,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -72,6 +74,24 @@ import com.droiddeck.launcher.frontend.Library
 import com.droiddeck.launcher.frontend.RetroLibrary
 import kotlinx.coroutines.launch
 
+/** Where the Retro pages were: the system last opened (the carousel starts there), and whether to focus a gallery's first game. */
+internal object RetroNav {
+    @Volatile var lastPlatform: String? = null
+    @Volatile var focusFirst = false
+    /** L1/R1 while a Retro page shows, wherever focus is (MainActivity.dispatchKeyEvent): -1 previous, +1 next system. */
+    @Volatile var onShoulder: ((Int) -> Unit)? = null
+}
+
+@Composable
+private fun ShoulderKeys(handler: (Int) -> Unit) {
+    val current by androidx.compose.runtime.rememberUpdatedState(handler)
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val h: (Int) -> Unit = { current(it) }
+        RetroNav.onShoulder = h
+        onDispose { if (RetroNav.onShoulder === h) RetroNav.onShoulder = null }
+    }
+}
+
 /** The Retro page's platforms: one card per system (its wallpaper, or its covers fanned out), sideways, as Daijishō shows them. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -79,6 +99,19 @@ internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (Str
     val colors = MaterialTheme.colorScheme
     var picker by remember { mutableStateOf(false) }
     var paths by remember { mutableStateOf(false) }
+    val list = rememberLazyListState(s.retro.indexOfFirst { it.platform.id == RetroNav.lastPlatform }.coerceAtLeast(0))
+    val scope = rememberCoroutineScope()
+    val libraryButtons = remember { HashMap<Int, FocusRequester>() }
+    val step: (Int) -> Unit = { d ->
+        if (s.retro.isNotEmpty()) {
+            val t = (list.firstVisibleItemIndex + d).mod(s.retro.size)
+            scope.launch {
+                list.animateScrollToItem(t)
+                runCatching { libraryButtons[t]?.requestFocus() }
+            }
+        }
+    }
+    ShoulderKeys(step)
     Column(modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.retro_title), fontSize = 28.sp, fontWeight = FontWeight.Black, color = colors.onBackground)
@@ -102,8 +135,6 @@ internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (Str
             Box(Modifier.padding(top = 16.dp)) { Note(stringResource(R.string.retro_empty)) }
             return@Column
         }
-        val list = rememberLazyListState()
-        val scope = rememberCoroutineScope()
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
             val cardW = (maxWidth * 0.84f).coerceAtMost(760.dp)
             val side = (maxWidth - cardW) / 2
@@ -115,7 +146,7 @@ internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (Str
                 modifier = Modifier.fillMaxSize(),
             ) {
                 itemsIndexed(s.retro, key = { _, sys -> sys.platform.id }) { i, sys ->
-                    PlatformCard(sys, i, s.retro.size, a, onSelect, Modifier.width(cardW).fillMaxHeight()) {
+                    PlatformCard(sys, i, s.retro.size, a, onSelect, Modifier.width(cardW).fillMaxHeight(), libraryButtons.getOrPut(i) { FocusRequester() }) {
                         scope.launch { list.animateScrollToItem(i) }
                     }
                 }
@@ -137,7 +168,7 @@ internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (Str
 @Composable
 private fun PlatformCard(
     sys: RetroLibrary.System, index: Int, count: Int, a: FrontEndActions, onSelect: (String) -> Unit, modifier: Modifier,
-    onFocused: () -> Unit,
+    library: FocusRequester, onFocused: () -> Unit,
 ) {
     var paths by remember { mutableStateOf(false) }
     Box(
@@ -157,7 +188,11 @@ private fun PlatformCard(
             )
             if (paths) Text(sys.folders.joinToString("\n") { it.path }, fontSize = 12.sp, color = Color.White, modifier = Modifier.padding(bottom = 10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                PrimaryButton(stringResource(R.string.retro_library), compact = true, icon = Icons.Outlined.PlayArrow) { onSelect("rsys:${sys.platform.id}") }
+                PrimaryButton(stringResource(R.string.retro_library), compact = true, icon = Icons.Outlined.PlayArrow, modifier = Modifier.focusRequester(library)) {
+                    RetroNav.lastPlatform = sys.platform.id
+                    RetroNav.focusFirst = true
+                    onSelect("rsys:${sys.platform.id}")
+                }
                 SecondaryButton(stringResource(R.string.retro_random), compact = true) { if (sys.games.isNotEmpty()) a.onRetroGame(sys, sys.games.random()) }
                 SecondaryButton(stringResource(R.string.retro_paths), compact = true) { paths = !paths }
             }
@@ -240,6 +275,22 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
     }
     val favorites = remember(sys.games, s.retroFavorites) { sys.games.withIndex().filter { it.value.hostPath.path in s.retroFavorites } }
     val shown = when (filter) { 1 -> recent; 2 -> favorites; else -> sys.games.withIndex().toList() }
+    val firstGame = remember { FocusRequester() }
+    LaunchedEffect(id, listView) {
+        RetroNav.lastPlatform = id
+        if (RetroNav.focusFirst) {
+            RetroNav.focusFirst = false
+            repeat(10) { if (runCatching { firstGame.requestFocus() }.isSuccess) return@LaunchedEffect; kotlinx.coroutines.delay(50) }
+        }
+    }
+    val jump: (Int) -> Unit = { d ->
+        val at = s.retro.indexOfFirst { it.platform.id == id }
+        if (at >= 0 && s.retro.size > 1) {
+            RetroNav.focusFirst = true
+            onSelect("rsys:" + s.retro[(at + d).mod(s.retro.size)].platform.id)
+        }
+    }
+    ShoulderKeys(jump)
     Column(modifier.fillMaxSize()) {
         if (!listView) Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -260,7 +311,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
                 val pick = focusedIndex?.takeIf { f -> shown.any { it.index == f } } ?: shown.firstOrNull()?.index
                 LazyColumn(Modifier.weight(0.46f).fillMaxHeight().padding(start = 12.dp, end = 6.dp)) {
                     itemsIndexed(shown) { _, (i, g) ->
-                        ListTitle(g, g.hostPath.path in s.retroFavorites, pick == i, { focusedIndex = i }) {
+                        ListTitle(g, g.hostPath.path in s.retroFavorites, pick == i, if (i == shown.first().index) firstGame else null, { focusedIndex = i }) {
                             if (pick == i) a.onRetroGame(sys, g) else focusedIndex = i
                         }
                     }
@@ -272,7 +323,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
             ) {
-                itemsIndexed(shown) { _, (i, g) -> GalleryCell(g, focusedIndex == i, { focusedIndex = i }) { open(i) } }
+                itemsIndexed(shown) { _, (i, g) -> GalleryCell(g, focusedIndex == i, if (i == shown.first().index) firstGame else null, { focusedIndex = i }) { open(i) } }
             }
         }
         val g = focusedIndex?.let { sys.games.getOrNull(it) }
@@ -306,11 +357,11 @@ private fun FilterChip(text: String, on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun GalleryCell(g: Library.Rom, focused: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun GalleryCell(g: Library.Rom, focused: Boolean, req: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(4.dp).clip(RoundedCornerShape(12.dp))
+        modifier = Modifier.then(if (req != null) Modifier.focusRequester(req) else Modifier).padding(4.dp).clip(RoundedCornerShape(12.dp))
             .background(if (focused) colors.surfaceVariant else Color.Transparent)
             .onFocusChanged { if (it.isFocused) onFocus() }
             .clickable { onFocus(); onClick() }
@@ -330,12 +381,12 @@ private fun GalleryCell(g: Library.Rom, focused: Boolean, onFocus: () -> Unit, o
 }
 
 @Composable
-private fun ListTitle(g: Library.Rom, favorite: Boolean, selected: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun ListTitle(g: Library.Rom, favorite: Boolean, selected: Boolean, req: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val pal = LocalPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp).clip(RoundedCornerShape(50))
+        modifier = Modifier.then(if (req != null) Modifier.focusRequester(req) else Modifier).fillMaxWidth().padding(vertical = 1.dp).clip(RoundedCornerShape(50))
             .background(if (selected) pal.signal else Color.Transparent)
             .onFocusChanged { if (it.isFocused) onFocus() }.clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 7.dp),
