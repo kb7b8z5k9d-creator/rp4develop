@@ -9,7 +9,7 @@ here is GPL-3.0, like the projects it is built from. The bridge fixes are offere
 and withdrawn: that project's CI rejects commits carrying an AI co-author trailer, and these were written with
 Claude Code, so they live on the fork branches below instead. Maintainers are welcome to take them from there.
 
-Tested on one Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
+Tested on my personal Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
 
 ## Coming soon
