@@ -157,6 +157,15 @@
                 android:resource="@xml/log_share_paths" />
         </provider>
         <provider
+            android:name=".frontend.RomFileProvider"
+            android:authorities="${applicationId}.roms"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/rom_paths" />
+        </provider>
+        <provider
             android:name=".files.AppFilesProvider"
             android:authorities="${applicationId}.documents"
             android:exported="true"

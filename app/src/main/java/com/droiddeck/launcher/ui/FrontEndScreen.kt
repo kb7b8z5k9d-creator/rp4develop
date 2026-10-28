@@ -100,6 +100,12 @@ class FrontEndState(
     val agentCommands: Boolean = false,
     val steamGames: List<Library.SteamGame>,
     val emulators: List<Library.Emulator>,
+    /** The Retro page: ROM folders played in Android emulators (RetroLibrary). */
+    val retro: List<com.droiddeck.launcher.frontend.RetroLibrary.System> = emptyList(),
+    /** Daijisho's platform wallpaper packs (WallpaperPacks): the names offered, the chosen one, the one downloading. */
+    val retroPacks: List<String> = emptyList(),
+    val retroPack: String? = null,
+    val retroPackBusy: String? = null,
     val running: String?,
     val frameGen: FrameGen.Mode = FrameGen.Mode.OFF,
     val lossless: Lossless.State = Lossless.State.NONE,
@@ -172,6 +178,10 @@ class FrontEndActions(
     val onFlatpakApp: (String, String) -> Unit = { _, _ -> },
     val onUserApp: (com.droiddeck.launcher.runtime.UserApps.App) -> Unit = {},
     val onRom: (Library.Rom) -> Unit,
+    val onRetroGame: (com.droiddeck.launcher.frontend.RetroLibrary.System, Library.Rom) -> Unit = { _, _ -> },
+    val onRetroPlayer: (com.droiddeck.launcher.frontend.RetroLibrary.System, com.droiddeck.launcher.frontend.Platforms.Player) -> Unit = { _, _ -> },
+    val onRetroWallpaperList: () -> Unit = {},
+    val onRetroWallpaperPack: (String?) -> Unit = {},
     val onResume: () -> Unit,
     val onSteamSettings: () -> Unit,
     val onDesktopSettings: () -> Unit,
@@ -422,6 +432,9 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
     ) {
         selected = if (selected.startsWith("rom:")) "emu:" + selected.removePrefix("rom:").substringBefore(':') else "desktop"
     }
+    BackHandler(enabled = !processSettingsPageVisible && (s.pageKey == null || page == null) && (selected.startsWith("rsys:") || selected.startsWith("rgame:"))) {
+        selected = if (selected.startsWith("rgame:")) "rsys:" + selected.removePrefix("rgame:").substringBefore(':') else "retro"
+    }
     LaunchedEffect(s.isHomeApp) { if (!s.isHomeApp && selected == "android-apps") selected = "steam" }
     LaunchedEffect(s.steamGames.isEmpty()) {
         if (s.steamGames.isEmpty() && selected.startsWith("app:")) selected = "games"
@@ -434,6 +447,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
         s.pageKey == "controller-mapping" -> "setup"
         selected.startsWith("app:") -> "games"
         selected.startsWith("emu:") || selected.startsWith("rom:") || selected.startsWith("user:") || selected == "store" -> "desktop"
+        selected.startsWith("rsys:") || selected.startsWith("rgame:") -> "retro"
         else -> s.pageKey ?: selected
     }
     var railPicks by remember { mutableStateOf(0) }
@@ -601,7 +615,8 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
     val hasBackTarget = (s.pageKey != null && page != null) ||
         (s.pageKey == null && Hops.origin?.page == selected) ||
         ((s.pageKey == null || page == null) &&
-            (selected.startsWith("emu:") || selected.startsWith("rom:") || selected.startsWith("user:") || selected == "store"))
+            (selected.startsWith("emu:") || selected.startsWith("rom:") || selected.startsWith("user:") || selected == "store" ||
+                selected.startsWith("rsys:") || selected.startsWith("rgame:")))
     BackHandler(enabled = !processSettingsPageVisible && !hasBackTarget) {
         if (inputModeManager.inputMode != InputMode.Keyboard) inputModeManager.requestInputMode(InputMode.Keyboard)
         runCatching { frontFocus.railFor(railSelection).requestFocus() }
