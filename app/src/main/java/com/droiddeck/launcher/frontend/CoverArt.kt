@@ -41,6 +41,11 @@ object CoverArt {
 
     fun cached(context: Context, rom: Library.Rom): File? = coverFile(context, rom).takeIf { it.isFile && it.length() > 0 }
 
+    private fun snapFile(context: Context, rom: Library.Rom) = File(root(context), "${rom.emulatorId}/${keyOf(rom)}.snap")
+
+    /** The game's screenshot (libretro Named_Snaps), fetched with its cover; the list view's backdrop. */
+    fun snap(context: Context, rom: Library.Rom): File? = snapFile(context, rom).takeIf { it.isFile && it.length() > 0 }
+
     private fun wanted(context: Context, rom: Library.Rom): Boolean {
         if (rom.art != null || cached(context, rom) != null || collectionsOf(context, rom.emulatorId) == null) return false
         val miss = missFile(context, rom)
@@ -63,6 +68,7 @@ object CoverArt {
             val url = try { findUrl(context, rom) } catch (e: Exception) { Log.w(TAG, "${rom.name}: $e"); null }
             if (url != null && download(url, target)) {
                 Log.i(TAG, "${rom.name}: $url")
+                if ("/Named_Boxarts/" in url) download(url.replace("/Named_Boxarts/", "/Named_Snaps/"), snapFile(context, rom))
                 missFile(context, rom).delete()
                 found = true
             } else {
@@ -266,7 +272,7 @@ object CoverArt {
     fun shrinkCached(context: Context, prefix: String): Int {
         var n = 0
         root(context).listFiles()?.filter { it.isDirectory && it.name.startsWith(prefix) }?.forEach { d ->
-            d.listFiles()?.filter { it.isFile && it.name.endsWith(".img") }?.forEach { if (shrink(it)) n++ }
+            d.listFiles()?.filter { it.isFile && (it.name.endsWith(".img") || it.name.endsWith(".snap")) }?.forEach { if (shrink(it)) n++ }
         }
         if (n > 0) Log.i(TAG, "shrank $n covers")
         return n

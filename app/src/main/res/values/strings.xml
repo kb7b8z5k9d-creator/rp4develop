@@ -2399,5 +2399,13 @@
     <string name="retro_played">Last played %1$s · Played %2$d times</string>
     <string name="retro_never_played">Not played yet</string>
     <string name="retro_pick_folder">Choose a ROM folder</string>
+    <string name="retro_list_played">Last played %1$s. Played %2$d times.</string>
+    <string name="retro_none">none</string>
+    <string name="retro_play">Play</string>
+    <string name="retro_add_favorite">Add favorite</string>
+    <string name="retro_remove_favorite">Remove favorite</string>
+    <string name="retro_detail">Detail</string>
+    <string name="retro_recent_button">Recent</string>
+    <string name="retro_list_status">%1$s platform. %2$d of %3$d</string>
     <string name="retro_credit">Systems and emulator launch settings from Daijishō (MIT)</string>
 </resources>

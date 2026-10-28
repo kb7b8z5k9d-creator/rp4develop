@@ -17,7 +17,10 @@ object Platforms {
     class Player(val id: String, val name: String, val args: String, val accept: Regex?) {
         val pkg: String? = Regex("-n\\s+([\\w.]+)/").find(args)?.groupValues?.get(1)
         /** The emulator's own name, without Daijishō's "<platform> - " prefix; a RetroArch core first: "snes9x2010 (RetroArch)". */
-        val label: String = name.substringAfter(" - ", name).trim().let { n ->
+        /** The installed app's own name, for players Daijisho names by package ("com.fastemulator.gba"). */
+        @Volatile var appLabel: String? = null
+        val label: String get() = appLabel?.takeIf { name.substringAfter(" - ", name).trim() == pkg } ?: baseLabel
+        private val baseLabel: String = name.substringAfter(" - ", name).trim().let { n ->
             Regex("(?i)^retroarch\\s*(32|64)?\\s*-\\s*(.+)$").find(n)?.let { m ->
                 val bits = m.groupValues[1]
                 "${m.groupValues[2].trim()} (RetroArch${if (bits == "32") " 32" else ""})"
@@ -75,6 +78,8 @@ object Platforms {
             have.getOrPut(pkg) {
                 try { pm.getPackageInfo(pkg, 0); true } catch (e: PackageManager.NameNotFoundException) { false }
             }
+        }.onEach { p ->
+            if (p.appLabel == null) p.appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(p.pkg!!, 0)).toString() }.getOrNull()
         }
     }
 

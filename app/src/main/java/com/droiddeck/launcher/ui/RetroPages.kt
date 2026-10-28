@@ -140,9 +140,6 @@ private fun PlatformCard(
     onFocused: () -> Unit,
 ) {
     var paths by remember { mutableStateOf(false) }
-    val focus = remember { MutableInteractionSource() }
-    val focused by focus.collectIsFocusedAsState()
-    LaunchedEffect(focused) { if (focused) onFocused() }
     Box(
         modifier.shadow(18.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp))
             .background(artBrush(hueOf(sys.platform.name)))
@@ -165,7 +162,6 @@ private fun PlatformCard(
                 SecondaryButton(stringResource(R.string.retro_paths), compact = true) { paths = !paths }
             }
         }
-        Box(Modifier.fillMaxSize().focusable(interactionSource = focus))
     }
 }
 
@@ -245,7 +241,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
     val favorites = remember(sys.games, s.retroFavorites) { sys.games.withIndex().filter { it.value.hostPath.path in s.retroFavorites } }
     val shown = when (filter) { 1 -> recent; 2 -> favorites; else -> sys.games.withIndex().toList() }
     Column(modifier.fillMaxSize()) {
-        Row(
+        if (!listView) Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 8.dp),
         ) {
@@ -259,12 +255,19 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
         if (showPlayers) Box(Modifier.padding(horizontal = 18.dp).padding(bottom = 8.dp)) { RetroPlayerPicker(sys, a) }
         val open: (Int) -> Unit = { i -> onSelect("rgame:${sys.platform.id}:$i") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (listView) LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-                itemsIndexed(shown) { _, (i, g) ->
-                    val detail = listOfNotNull(sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
-                        s.retroStats[g.hostPath.path]?.let { playedLine(it) }, g.hostPath.extension.uppercase().takeIf { it.isNotEmpty() }).joinToString("   ·   ")
-                    GalleryRow(g, detail, g.hostPath.path in s.retroFavorites, focusedIndex == i, { focusedIndex = i }) { open(i) }
+            if (listView) Row(Modifier.fillMaxSize()) {
+                // Daijisho's list: titles on the left, the selected game's cover, name and buttons on the right
+                val pick = focusedIndex?.takeIf { f -> shown.any { it.index == f } } ?: shown.firstOrNull()?.index
+                LazyColumn(Modifier.weight(0.46f).fillMaxHeight().padding(start = 12.dp, end = 6.dp)) {
+                    itemsIndexed(shown) { _, (i, g) ->
+                        ListTitle(g, g.hostPath.path in s.retroFavorites, pick == i, { focusedIndex = i }) {
+                            if (pick == i) a.onRetroGame(sys, g) else focusedIndex = i
+                        }
+                    }
                 }
+                val sel = pick?.let { sys.games.getOrNull(it) }
+                if (sel != null) ListDetail(s, a, sys, sel, filter == 1, Modifier.weight(0.54f).fillMaxHeight(),
+                    onRecent = { filter = if (filter == 1) 0 else 1 }, onGrid = { listView = false }) { open(pick) }
             } else LazyVerticalGrid(
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
@@ -277,7 +280,10 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 18.dp, vertical = 8.dp),
         ) {
-            Text(
+            if (listView) Text(
+                stringResource(R.string.retro_list_status, sys.platform.name, ((focusedIndex ?: shown.firstOrNull()?.index ?: 0) + 1), sys.games.size),
+                fontSize = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            ) else Text(
                 if (g != null) listOfNotNull(
                     g.name, sys.info[g.hostPath.path]?.line()?.takeIf { it.isNotEmpty() },
                     s.retroStats[g.hostPath.path]?.let { st -> playedLine(st) },
@@ -320,6 +326,64 @@ private fun GalleryCell(g: Library.Rom, focused: Boolean, onFocus: () -> Unit, o
             g.name, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic, color = colors.onBackground,
             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp).height(36.dp),
         )
+    }
+}
+
+@Composable
+private fun ListTitle(g: Library.Rom, favorite: Boolean, selected: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val pal = LocalPalette.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp).clip(RoundedCornerShape(50))
+            .background(if (selected) pal.signal else Color.Transparent)
+            .onFocusChanged { if (it.isFocused) onFocus() }.clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    ) {
+        Text(g.name, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) Color.White else colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (favorite) Text("♥", fontSize = 15.sp, color = Color(0xFFE0457B), modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+@Composable
+private fun ListDetail(
+    s: FrontEndState, a: FrontEndActions, sys: RetroLibrary.System, g: Library.Rom, recentOn: Boolean, modifier: Modifier,
+    onRecent: () -> Unit, onGrid: () -> Unit, onDetail: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val stat = s.retroStats[g.hostPath.path]
+    val favorite = g.hostPath.path in s.retroFavorites
+    val snap = remember(g.hostPath.path, g.art) { com.droiddeck.launcher.frontend.CoverArt.snap(context, g) }
+    Column(modifier.padding(start = 6.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+            if (snap != null) AsyncImage(model = snap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            if (g.art != null) AsyncImage(
+                model = g.art, contentDescription = g.name, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxHeight(0.8f).fillMaxWidth(0.6f).graphicsLayer { shadowElevation = 18.dp.toPx() },
+            ) else Box(Modifier.fillMaxHeight(0.9f).aspectRatio(0.75f).clip(RoundedCornerShape(10.dp)).background(artBrush(hueOf(g.name))), contentAlignment = Alignment.BottomStart) {
+                Text(g.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(8.dp))
+            }
+        }
+        Text(g.name, fontSize = 19.sp, fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic, color = colors.onBackground,
+            textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            listOfNotNull(
+                sys.info[g.hostPath.path]?.genre?.takeIf { it.isNotBlank() },
+                stringResource(R.string.retro_list_played, stat?.let { android.text.format.DateUtils.getRelativeTimeSpanString(it.last).toString() }
+                    ?: stringResource(R.string.retro_none), stat?.count ?: 0),
+            ).joinToString(" • "),
+            fontSize = 12.sp, color = colors.onSurfaceVariant, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            PrimaryButton(stringResource(R.string.retro_play), compact = true, icon = Icons.Outlined.PlayArrow, enabled = sys.player != null) { a.onRetroGame(sys, g) }
+            SecondaryButton(if (favorite) stringResource(R.string.retro_remove_favorite) else stringResource(R.string.retro_add_favorite), compact = true) { a.onRetroFavorite(g) }
+            if (recentOn) PrimaryButton(stringResource(R.string.retro_recent_button), compact = true) { onRecent() }
+            else SecondaryButton(stringResource(R.string.retro_recent_button), compact = true) { onRecent() }
+            SecondaryButton(stringResource(R.string.retro_detail), compact = true) { onDetail() }
+            SecondaryButton(stringResource(R.string.retro_grid_view), compact = true) { onGrid() }
+        }
     }
 }
 
