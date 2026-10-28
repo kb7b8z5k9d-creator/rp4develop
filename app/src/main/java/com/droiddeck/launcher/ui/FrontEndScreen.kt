@@ -408,6 +408,9 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
     val ctx = LocalContext.current
     val phantomGateVisible = s.showPhantomGate && PhantomProcessLimit.blocksSteam(s.phantomProcessStatus)
     val processSettingsPageVisible = phantomGateVisible || showWirelessAdbFix || showDeveloperDisplayChoice
+    val retroOpen = RetroNav.open
+    // retro mode has its own Back (RetroMode), so none of the rail's may take it
+    val backBlocked = processSettingsPageVisible || retroOpen
     val requestDeveloperOptions = {
         if (s.secondScreenDisplays.isEmpty()) a.onOpenDeveloperOptions(null)
         else showDeveloperDisplayChoice = true
@@ -425,21 +428,21 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
         }
     }
     val pageBack = { if (!Hops.back(a.onPageBack)) a.onPageBack() }
-    BackHandler(enabled = !processSettingsPageVisible && s.pageKey != null && page != null) { pageBack() }
+    BackHandler(enabled = !backBlocked && s.pageKey != null && page != null) { pageBack() }
     LaunchedEffect(s.pageKey, selected) { Hops.forget(s.pageKey ?: selected) }
-    BackHandler(enabled = !processSettingsPageVisible && s.pageKey == null && Hops.origin?.page == selected) {
+    BackHandler(enabled = !backBlocked && s.pageKey == null && Hops.origin?.page == selected) {
         val rail = Hops.origin?.rail ?: return@BackHandler
         Hops.back { selected = rail }
     }
     val density = androidx.compose.ui.platform.LocalDensity.current.density
     remember(density) { Hops.density = density; true }
     BackHandler(
-        enabled = !processSettingsPageVisible && (s.pageKey == null || page == null) &&
+        enabled = !backBlocked && (s.pageKey == null || page == null) &&
             (selected.startsWith("emu:") || selected.startsWith("rom:") || selected.startsWith("user:") || selected == "store"),
     ) {
         selected = if (selected.startsWith("rom:")) "emu:" + selected.removePrefix("rom:").substringBefore(':') else "desktop"
     }
-    BackHandler(enabled = !processSettingsPageVisible && (s.pageKey == null || page == null) && (selected.startsWith("rsys:") || selected.startsWith("rgame:"))) {
+    BackHandler(enabled = !backBlocked && (s.pageKey == null || page == null) && (selected.startsWith("rsys:") || selected.startsWith("rgame:"))) {
         selected = if (selected.startsWith("rgame:")) "rsys:" + selected.removePrefix("rgame:").substringBefore(':') else "retro"
     }
     LaunchedEffect(s.isHomeApp) { if (!s.isHomeApp && selected == "android-apps") selected = "steam" }
@@ -484,8 +487,8 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             .windowInsetsPadding(if (s.launcherFullscreen) WindowInsets.displayCutout else WindowInsets.systemBars)
             .onFocusChanged { anyFocused = it.hasFocus },
     ) {
-        LaunchedEffect(processSettingsPageVisible) {
-            if (processSettingsPageVisible) return@LaunchedEffect
+        LaunchedEffect(processSettingsPageVisible, retroOpen) {
+            if (processSettingsPageVisible || retroOpen) return@LaunchedEffect
             snapshotFlow { window.isWindowFocused }.first { it }
             if (inputModeManager.inputMode != InputMode.Keyboard) inputModeManager.requestInputMode(InputMode.Keyboard)
             focusWithinFrames({ anyFocused }) { if (frontFocus.primaryAttached > 0) frontFocus.primary else frontFocus.railFor(railSelection) }
@@ -498,8 +501,8 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             withFrameNanos { }
             runCatching { frontFocus.paneEntry().requestFocus() }
         }
-        LaunchedEffect(selected, s.pageKey, processSettingsPageVisible) {
-            if (processSettingsPageVisible) return@LaunchedEffect
+        LaunchedEffect(selected, s.pageKey, processSettingsPageVisible, retroOpen) {
+            if (processSettingsPageVisible || retroOpen) return@LaunchedEffect
             kotlinx.coroutines.delay(Motion.ms(PAGE_EXIT_MS).toLong())
             if (inputModeManager.inputMode != InputMode.Keyboard) return@LaunchedEffect
             if (s.pageKey == "performance") {
@@ -513,7 +516,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
             focusWithinFrames({ anyFocused }) { if (frontFocus.primaryAttached > 0) frontFocus.primary else frontFocus.railFor(railSelection) }
         }
         LaunchedEffect(railPicks) {
-            if (railPicks == 0 || processSettingsPageVisible) return@LaunchedEffect
+            if (railPicks == 0 || processSettingsPageVisible || retroOpen) return@LaunchedEffect
             kotlinx.coroutines.delay(Motion.ms(PAGE_EXIT_MS).toLong())
             if (inputModeManager.inputMode != InputMode.Keyboard) return@LaunchedEffect
             withTimeoutOrNull(1_000) { snapshotFlow { frontFocus.primaryAttached > 0 }.first { it } } ?: return@LaunchedEffect
@@ -537,7 +540,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
         }
         var screenAt by remember { mutableStateOf(Offset.Zero) }
         CompositionLocalProvider(LocalShowSection provides { key -> selected = key }) {
-        Row(modifier = Modifier.fillMaxSize().onGloballyPositioned { screenAt = it.positionInRoot() }) {
+        if (!retroOpen) Row(modifier = Modifier.fillMaxSize().onGloballyPositioned { screenAt = it.positionInRoot() }) {
             SideRail(s, railSelection, onRailSelect, onRailFocus, a, railFocus.fillMaxHeight())
             Box(Modifier.width(1.dp).fillMaxHeight().background(pal.line))
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -552,6 +555,12 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
                 )
             }
         }
+        AnimatedVisibility(
+            visible = retroOpen,
+            enter = fadeIn(Motion.tw(280)) + androidx.compose.animation.scaleIn(Motion.tw(380), initialScale = 1.06f),
+            exit = androidx.compose.animation.ExitTransition.None,
+            label = "retroMode",
+        ) { RetroMode(s, a) { RetroNav.open = false } }
 
         }
         FlightsLayer(screenAt)
@@ -624,7 +633,7 @@ private fun FrontEndScreenBody(s: FrontEndState, a: FrontEndActions, page: (@Com
         ((s.pageKey == null || page == null) &&
             (selected.startsWith("emu:") || selected.startsWith("rom:") || selected.startsWith("user:") || selected == "store" ||
                 selected.startsWith("rsys:") || selected.startsWith("rgame:")))
-    BackHandler(enabled = !processSettingsPageVisible && !hasBackTarget) {
+    BackHandler(enabled = !backBlocked && !hasBackTarget) {
         if (inputModeManager.inputMode != InputMode.Keyboard) inputModeManager.requestInputMode(InputMode.Keyboard)
         runCatching { frontFocus.railFor(railSelection).requestFocus() }
     }

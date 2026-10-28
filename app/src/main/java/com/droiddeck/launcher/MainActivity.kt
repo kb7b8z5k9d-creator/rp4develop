@@ -958,8 +958,13 @@ class MainActivity : ComponentActivity() {
         }, "finish-abandoned").start()
     }
 
+    /** Stopped since it last came to the front: a game or another app had the screen. */
+    private var leftFront = false
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Home pressed in DroidDeck itself leaves retro mode; Home from a game comes back to it
+        if (intent.getBooleanExtra(HomeActivity.EXTRA_HOME_PRESS, false) && !leftFront) com.droiddeck.launcher.ui.RetroNav.open = false
         setIntent(intent)
         readGameIntent(intent)
         refresh()
@@ -1027,6 +1032,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        leftFront = false
         orientation = SessionPrefs.orientation(this)
         requestedOrientation = orientation
         refreshWifiDiscovery()
@@ -1086,6 +1092,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        leftFront = true
         unregisterReceiver(wifiLocationReceiver)
         unregisterReceiver(mediaReceiver)
         ui.removeCallbacks(mediaRefresh)

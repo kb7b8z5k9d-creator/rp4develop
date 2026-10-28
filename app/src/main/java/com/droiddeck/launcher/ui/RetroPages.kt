@@ -1,16 +1,13 @@
 package com.droiddeck.launcher.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,12 +22,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Casino
@@ -47,7 +42,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,101 +66,32 @@ import coil.compose.AsyncImage
 import com.droiddeck.launcher.R
 import com.droiddeck.launcher.frontend.Library
 import com.droiddeck.launcher.frontend.RetroLibrary
-import kotlinx.coroutines.launch
 
-/** Where the Retro pages were: the system last opened (the carousel starts there), and whether to focus a gallery's first game. */
+/** Where the Retro pages were: the system last opened (the cards start there), and whether to focus a gallery's first game. */
 internal object RetroNav {
     @Volatile var lastPlatform: String? = null
     @Volatile var focusFirst = false
     /** L1/R1 while a Retro page shows, wherever focus is (MainActivity.dispatchKeyEvent): -1 previous, +1 next system. */
     @Volatile var onShoulder: ((Int) -> Unit)? = null
+    /** Retro mode (RetroMode) is up, full screen over the rail; kept while a game plays, so Home comes back to it. */
+    var open by mutableStateOf(false)
 }
 
+/** Takes L1/R1 while [active]: the newest active page has them, and hands them back when it goes or stops being active. */
 @Composable
-private fun ShoulderKeys(handler: (Int) -> Unit) {
+internal fun ShoulderKeys(active: Boolean = true, handler: (Int) -> Unit) {
     val current by androidx.compose.runtime.rememberUpdatedState(handler)
-    androidx.compose.runtime.DisposableEffect(Unit) {
+    androidx.compose.runtime.DisposableEffect(active) {
+        if (!active) return@DisposableEffect onDispose { }
         val h: (Int) -> Unit = { current(it) }
+        val before = RetroNav.onShoulder
         RetroNav.onShoulder = h
-        onDispose { if (RetroNav.onShoulder === h) RetroNav.onShoulder = null }
-    }
-}
-
-/** The Retro page's platforms: one card per system (its wallpaper, or its covers fanned out), sideways, as Daijishō shows them. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal fun RetroPlatforms(s: FrontEndState, a: FrontEndActions, onSelect: (String) -> Unit, modifier: Modifier) {
-    val colors = MaterialTheme.colorScheme
-    var picker by remember { mutableStateOf(false) }
-    var paths by remember { mutableStateOf(false) }
-    val list = rememberLazyListState(s.retro.indexOfFirst { it.platform.id == RetroNav.lastPlatform }.coerceAtLeast(0))
-    val scope = rememberCoroutineScope()
-    val libraryButtons = remember { HashMap<Int, FocusRequester>() }
-    val step: (Int) -> Unit = { d ->
-        if (s.retro.isNotEmpty()) {
-            val t = (list.firstVisibleItemIndex + d).mod(s.retro.size)
-            scope.launch {
-                list.animateScrollToItem(t)
-                runCatching { libraryButtons[t]?.requestFocus() }
-            }
-        }
-    }
-    ShoulderKeys(step)
-    Column(modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.retro_title), fontSize = 28.sp, fontWeight = FontWeight.Black, color = colors.onBackground)
-            Chip(stringResource(R.string.retro_games_count, s.retro.sumOf { it.games.size }), ok = false)
-            Spacer(Modifier.weight(1f))
-            SecondaryButton(stringResource(R.string.retro_paths), compact = true) { paths = !paths; picker = false }
-            SecondaryButton(s.retroPack ?: stringResource(R.string.retro_wallpapers), compact = true) {
-                picker = !picker; paths = false
-                if (picker) a.onRetroWallpaperList()
-            }
-        }
-        if (paths) {
-            RootsPanel(s, a, Modifier.weight(1f).padding(top = 12.dp))
-            return@Column
-        }
-        if (picker) {
-            WallpaperPicker(s, a, Modifier.weight(1f).padding(top = 12.dp)) { picker = false }
-            return@Column
-        }
-        if (s.retro.isEmpty()) {
-            Box(Modifier.padding(top = 16.dp)) { Note(stringResource(R.string.retro_empty)) }
-            return@Column
-        }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-            val cardW = (maxWidth * 0.84f).coerceAtMost(760.dp)
-            val side = (maxWidth - cardW) / 2
-            LazyRow(
-                state = list,
-                flingBehavior = rememberSnapFlingBehavior(list),
-                contentPadding = PaddingValues(horizontal = side),
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                itemsIndexed(s.retro, key = { _, sys -> sys.platform.id }) { i, sys ->
-                    PlatformCard(sys, i, s.retro.size, a, onSelect, Modifier.width(cardW).fillMaxHeight(), libraryButtons.getOrPut(i) { FocusRequester() }) {
-                        scope.launch { list.animateScrollToItem(i) }
-                    }
-                }
-            }
-        }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-            itemsIndexed(s.retro) { i, sys ->
-                val current = list.firstVisibleItemIndex == i
-                Text(
-                    sys.platform.shortname.uppercase(), fontSize = 12.sp, fontWeight = if (current) FontWeight.Black else FontWeight.Bold,
-                    fontStyle = FontStyle.Italic, color = if (current) colors.onBackground else colors.onSurfaceVariant,
-                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { scope.launch { list.animateScrollToItem(i) } }.padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
-        }
+        onDispose { if (RetroNav.onShoulder === h) RetroNav.onShoulder = before }
     }
 }
 
 @Composable
-private fun PlatformCard(
+internal fun PlatformCard(
     sys: RetroLibrary.System, index: Int, count: Int, a: FrontEndActions, onSelect: (String) -> Unit, modifier: Modifier,
     library: FocusRequester, onFocused: () -> Unit,
 ) {
@@ -225,17 +150,14 @@ private fun FannedCovers(games: List<Library.Rom>, modifier: Modifier) {
 }
 
 @Composable
-private fun RootsPanel(s: FrontEndState, a: FrontEndActions, modifier: Modifier) {
+internal fun RootsPanel(s: FrontEndState, a: FrontEndActions, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     Column(modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.retro_paths_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.onBackground)
-        Text(stringResource(R.string.retro_paths_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp))
-        LazyColumn(Modifier.weight(1f, fill = false).fillMaxWidth()) {
-            itemsIndexed(s.retroRoots) { _, path ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Text(path, fontSize = 14.sp, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    SecondaryButton(stringResource(R.string.retro_remove), compact = true) { a.onRetroRemoveRoot(path) }
-                }
+        Text(stringResource(R.string.retro_paths_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(bottom = 10.dp))
+        s.retroRoots.forEach { path ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text(path, fontSize = 14.sp, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                SecondaryButton(stringResource(R.string.retro_remove), compact = true) { a.onRetroRemoveRoot(path) }
             }
         }
         Box(Modifier.padding(top = 10.dp)) { PrimaryButton(stringResource(R.string.retro_add_folder), compact = true) { a.onRetroAddRoot() } }
@@ -243,29 +165,31 @@ private fun RootsPanel(s: FrontEndState, a: FrontEndActions, modifier: Modifier)
 }
 
 @Composable
-private fun WallpaperPicker(s: FrontEndState, a: FrontEndActions, modifier: Modifier, onDone: () -> Unit) {
+internal fun WallpaperPicker(s: FrontEndState, a: FrontEndActions, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    LaunchedEffect(Unit) { a.onRetroWallpaperList() }
     Column(modifier.fillMaxWidth()) {
         Text(stringResource(R.string.retro_wallpapers_hint), fontSize = 13.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
         if (s.retroPackBusy != null) Text(stringResource(R.string.retro_wallpapers_busy, s.retroPackBusy), fontSize = 13.sp, color = colors.onBackground, modifier = Modifier.padding(bottom = 8.dp))
-        val names = listOf<String?>(null) + s.retroPacks
-        LazyColumn(Modifier.fillMaxWidth()) {
-            itemsIndexed(names) { _, name ->
-                val label = name ?: stringResource(R.string.retro_wallpapers_none)
-                val chosen = name == s.retroPack
-                Text(
-                    (if (chosen) "● " else "") + label, fontSize = 15.sp, fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal, color = colors.onBackground,
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = s.retroPackBusy == null) { a.onRetroWallpaperPack(name); onDone() }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
+        (listOf<String?>(null) + s.retroPacks).forEach { name ->
+            val label = name ?: stringResource(R.string.retro_wallpapers_none)
+            val chosen = name == s.retroPack
+            Text(
+                (if (chosen) "● " else "") + label, fontSize = 15.sp, fontWeight = if (chosen) FontWeight.Bold else FontWeight.Normal, color = colors.onBackground,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = s.retroPackBusy == null) { a.onRetroWallpaperPack(name) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
         }
     }
 }
 
 /** A platform's games as a wall of box art (or a list), with the selected game's details in a bar at the bottom. */
 @Composable
-internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String, onSelect: (String) -> Unit, modifier: Modifier) {
+internal fun RetroGallery(
+    s: FrontEndState, a: FrontEndActions, selected: String, onSelect: (String) -> Unit, modifier: Modifier,
+    active: Boolean = true, // false while a page covers it (retro mode keeps it under a game's page)
+    refocus: Int = 0, // bumped to put focus back on the game last focused
+) {
     val colors = MaterialTheme.colorScheme
     val id = selected.substringAfter(':')
     val sys = s.retro.firstOrNull { it.platform.id == id }
@@ -282,6 +206,13 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
     val favorites = remember(sys.games, s.retroFavorites) { sys.games.withIndex().filter { it.value.hostPath.path in s.retroFavorites } }
     val shown = when (filter) { 1 -> recent; 2 -> favorites; else -> sys.games.withIndex().toList() }
     val firstGame = remember { FocusRequester() }
+    val cells = remember(id) { HashMap<Int, FocusRequester>() }
+    val cellFor: (Int) -> FocusRequester = { i -> if (i == shown.firstOrNull()?.index) firstGame else cells.getOrPut(i) { FocusRequester() } }
+    LaunchedEffect(refocus) {
+        val i = focusedIndex ?: return@LaunchedEffect
+        if (refocus == 0) return@LaunchedEffect
+        repeat(10) { if (runCatching { cellFor(i).requestFocus() }.isSuccess) return@LaunchedEffect; kotlinx.coroutines.delay(50) }
+    }
     LaunchedEffect(id, listView) {
         RetroNav.lastPlatform = id
         if (RetroNav.focusFirst) {
@@ -296,7 +227,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
             onSelect("rsys:" + s.retro[(at + d).mod(s.retro.size)].platform.id)
         }
     }
-    ShoulderKeys(jump)
+    ShoulderKeys(active, jump)
     Column(modifier.fillMaxSize()) {
         if (!listView) Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -315,7 +246,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
                 val pick = focusedIndex?.takeIf { f -> shown.any { it.index == f } } ?: shown.firstOrNull()?.index
                 LazyColumn(Modifier.weight(0.46f).fillMaxHeight().padding(start = 12.dp, end = 6.dp)) {
                     itemsIndexed(shown) { _, (i, g) ->
-                        ListTitle(g, g.hostPath.path in s.retroFavorites, pick == i, if (i == shown.first().index) firstGame else null, { focusedIndex = i }) {
+                        ListTitle(g, g.hostPath.path in s.retroFavorites, pick == i, cellFor(i), { focusedIndex = i }) {
                             if (pick == i) a.onRetroGame(sys, g) else focusedIndex = i
                         }
                     }
@@ -327,7 +258,7 @@ internal fun RetroGallery(s: FrontEndState, a: FrontEndActions, selected: String
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
             ) {
-                itemsIndexed(shown) { _, (i, g) -> GalleryCell(g, focusedIndex == i, if (i == shown.first().index) firstGame else null, { focusedIndex = i }) { open(i) } }
+                itemsIndexed(shown) { _, (i, g) -> GalleryCell(g, focusedIndex == i, cellFor(i), { focusedIndex = i }) { open(i) } }
             }
         }
         val g = focusedIndex?.let { sys.games.getOrNull(it) }

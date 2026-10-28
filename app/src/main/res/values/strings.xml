@@ -2385,6 +2385,10 @@
     <string name="retro_random">Random</string>
     <string name="retro_paths">Paths</string>
     <string name="retro_settings">Settings</string>
+    <string name="retro_play_games">Play Retro Games</string>
+    <string name="retro_emulators">Emulators</string>
+    <string name="retro_mode_keys">Ⓐ Select   Ⓑ Back   L1/R1 System   Start Settings</string>
+    <string name="retro_settings_keys">Ⓐ Select   Ⓑ Library</string>
     <string name="retro_list_view">List view</string>
     <string name="retro_grid_view">Grid view</string>
     <string name="retro_items">%1$d items</string>

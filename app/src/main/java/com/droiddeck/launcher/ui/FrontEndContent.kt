@@ -259,7 +259,7 @@ private fun romFor(s: FrontEndState, selected: String): Pair<Library.Emulator, L
 }
 
 @Composable
-private fun Content(
+internal fun Content(
     s: FrontEndState, selected: String, a: FrontEndActions, modifier: Modifier,
     onSelect: (String) -> Unit, onAndroidAppClick: (HomeApp.LaunchableApp) -> Unit,
     onOpenDeveloperOptions: () -> Unit, onRequestWirelessAdb: (Boolean) -> Unit,
@@ -301,7 +301,7 @@ private fun Content(
         return
     }
     if (selected == "retro") {
-        RetroPlatforms(s, a, onSelect, modifier)
+        RetroStart(s, a, modifier)
         return
     }
     if (selected.startsWith("rsys:")) {
