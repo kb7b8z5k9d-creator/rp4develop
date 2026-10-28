@@ -132,24 +132,38 @@ DroidDeck branches for `main`.
 
 ## Device tips
 
-Settings on the device itself, not in the APK, that cost an evening to find:
+Settings on the device itself, not in the APK. The first four are confirmed on my RP4 Pro; the Retroid
+settings at the end are recommendations I haven't measured yet.
 
-- **Home needs two presses to open the Steam menu.** Retroid's own "prevent accidental Home press" setting
-  swallows the first press (system setting `prevent_press_home_accidentally`). Turn it off in Retroid's Settings,
-  or from a PC: `adb shell settings put system prevent_press_home_accidentally 0`. One press then opens the Steam
-  menu when DroidDeck is the home app.
+- **Home needs two presses to open the Steam menu.** Retroid's "Prevent press the Home button accidentally"
+  setting swallows the first press. Turn it off in Retroid's Settings, or from a PC:
+  `adb shell settings put system prevent_press_home_accidentally 0`. One press then opens the Steam menu when
+  DroidDeck is the home app.
 - **No quick-access panel (the three dots in DroidDeck's side panel, Back double-tap, hold Back + X).** In
   DroidDeck's controller settings, set **Steam controller** to **Steam Deck**. As Xbox 360 the pad has no
   quick-access button and the app's chord fallback does nothing. Applies at the next Steam session.
+- **Steam says "Unable to Sync" when you launch a game.** The device is offline (Wi-Fi off). **Play anyway**
+  starts the game normally; only the cloud saves for that session wait until you're back online.
 - **A game crawls in menus or dialog scenes while its main thread sits at 100% CPU.** Seen in Ys I & II
   Chronicles+: the game converts a paletted 640x480 image into a locked Direct3D surface one byte at a time, and
-  FEX's x86 memory-ordering emulation (TSO) makes every byte a store-release into the bridge's uncached shared
-  memory, about 170 ms a frame. Set that game's FEX preset to **Performance** (TSO off) in its game profile; it
-  is a per-game setting, nothing else changes. Old single-threaded games take it well; games with
-  lock-free threading may not, so try it per game. The next build adds a second option for games that need TSO
-  kept on: `VKBRIDGE_CACHED_UPLOAD=1` in that game's bridge preset gives it cached memory, and the bridge does
-  the cache cleaning itself, since DXVK never flushes host memory. It's off by default and has a memory budget
-  (`VKBRIDGE_CACHED_UPLOAD_MB`, 64 MB). For Ys I, TSO off is still the better fix.
+  FEX's x86 memory-ordering emulation (TSO) turns every byte into a store-release into the bridge's uncached
+  shared memory, about 160 ms a frame. Set that game's FEX preset to **Performance** (TSO off) in its game
+  profile. It's a per-game setting and nothing else changes. Old single-threaded games take it well; games
+  with lock-free threading may not, so try it per game.
+  The next build adds a second option for games that need TSO kept on: `VKBRIDGE_CACHED_UPLOAD=1` in that
+  game's bridge preset gives it cached memory, and the bridge does the cache cleaning itself, since DXVK never
+  flushes host memory. That cleaning costs about 3 ms per submit at the default 64 MB budget
+  (`VKBRIDGE_CACHED_UPLOAD_MB`), so it's off by default, and for Ys I TSO off is still the better fix.
+- **Retroid settings worth trying for a Steam Deck feel** (in Retroid's Settings and Game Assistant):
+  - **Performance mode High** and the fan on Smart or Sport while playing. I haven't compared it with Standard
+    yet.
+  - **L2/R2 mode Analog**, not Digital, so Steam games see real triggers. Keep the stick and trigger dead
+    zones small and let Steam Input handle them.
+  - Leave the **Back and Home key mappings** at stock ("Enable convert gamepad key value" off); DroidDeck
+    relies on the normal Back and Home keys.
+  - Keep **"Clean process when standby"** off, or whitelist DroidDeck, so sleep doesn't end your Steam session.
+  - **Docked to a TV:** DisplayPort over USB-C goes up to 1080p120 (needs a reboot after changing it), and
+    "Disable auto sleep when HDMI/DP connected" keeps the screen on. Not tested with DroidDeck yet.
 
 ## Source and commit history
 
