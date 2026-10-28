@@ -132,16 +132,28 @@ DroidDeck branches for `main`.
 
 ## Device tips
 
-Settings on the device itself, not in the APK. The first four are confirmed on my RP4 Pro; the Retroid
-settings at the end are recommendations I haven't measured yet.
+Settings on the device itself, not in the APK.
 
-- **Home needs two presses to open the Steam menu.** Retroid's "Prevent press the Home button accidentally"
-  setting swallows the first press. Turn it off in Retroid's Settings, or from a PC:
-  `adb shell settings put system prevent_press_home_accidentally 0`. One press then opens the Steam menu when
-  DroidDeck is the home app.
-- **No quick-access panel (the three dots in DroidDeck's side panel, Back double-tap, hold Back + X).** In
-  DroidDeck's controller settings, set **Steam controller** to **Steam Deck**. As Xbox 360 the pad has no
-  quick-access button and the app's chord fallback does nothing. Applies at the next Steam session.
+### Make the Home button work like the Steam button
+
+Out of the box, Home on the RP4 Pro needs two presses and there's no Quick Access menu. These three settings
+fix that; all three are set on my RP4 Pro and confirmed working:
+
+1. **Make DroidDeck the Home app.** In DroidDeck: **Setup → Use as Home screen** on, then **Default Home app →
+   Choose → DroidDeck**.
+2. **Turn off Retroid's Home guard.** In Retroid's **Handheld settings**, turn off **"Prevent press the Home
+   button accidentally"**. With it on, the first press is swallowed and only shows a toast. From a PC it's
+   `adb shell settings put system prevent_press_home_accidentally 0`.
+3. **Set the controller type to Steam Deck.** In DroidDeck's Steam settings (**Settings** under **Play Steam**),
+   set **Controller** to **Steam Deck controller** (it's also in the side panel during a session). It applies
+   from the next Steam session. As the default Xbox 360 controller, the pad has no Quick Access button, so the
+   three dots in the side panel do nothing.
+
+After that, **one press of Home opens the Steam menu**, and the **three dots** in DroidDeck's side panel open
+Steam's **Quick Access** menu, the same as on a Steam Deck.
+
+### Other tips
+
 - **Steam says "Unable to Sync" when you launch a game.** The device is offline (Wi-Fi off). **Play anyway**
   starts the game normally; only the cloud saves for that session wait until you're back online.
 - **A game crawls in menus or dialog scenes while its main thread sits at 100% CPU.** Seen in Ys I & II
