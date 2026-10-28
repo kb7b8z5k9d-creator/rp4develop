@@ -38,6 +38,13 @@ object RetroLibrary {
         prefs(context).edit().putString("player.$platform", player).apply()
     }
 
+    /** Whether a system's games open as a list (the default) or a grid of box art. */
+    fun listView(context: Context): Boolean = prefs(context).getBoolean("listView", true)
+
+    fun setListView(context: Context, list: Boolean) {
+        prefs(context).edit().putBoolean("listView", list).apply()
+    }
+
     fun extraRoots(context: Context): List<String> =
         prefs(context).getString("roots", "").orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
 

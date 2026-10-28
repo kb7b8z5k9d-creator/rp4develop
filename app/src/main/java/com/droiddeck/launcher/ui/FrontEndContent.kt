@@ -382,9 +382,7 @@ internal fun Content(
                                         if (player != null) stringResource(R.string.retro_play) else stringResource(R.string.retro_no_player, sys.platform.name),
                                         enabled = player != null, main = true,
                                     ) { a.onRetroGame(sys, g) }
-                                    SecondaryButton(
-                                        if (g.hostPath.path in s.retroFavorites) stringResource(R.string.retro_favorite_on) else stringResource(R.string.retro_favorite_add),
-                                    ) { a.onRetroFavorite(g) }
+                                    FavoriteStar(g.hostPath.path in s.retroFavorites) { a.onRetroFavorite(g) }
                                     ActionChip(g.hostPath.extension.uppercase().ifEmpty { stringResource(R.string.content_rom_folder) }, ok = false)
                                 }
                             }

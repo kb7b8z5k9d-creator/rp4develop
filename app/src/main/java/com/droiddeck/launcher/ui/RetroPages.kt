@@ -44,6 +44,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -119,8 +129,8 @@ internal fun PlatformCard(
                     RetroNav.focusFirst = true
                     onSelect("rsys:${sys.platform.id}")
                 }
-                SecondaryButton(stringResource(R.string.retro_random), compact = true) { if (sys.games.isNotEmpty()) a.onRetroGame(sys, sys.games.random()) }
-                SecondaryButton(stringResource(R.string.retro_settings), compact = true) { settings = !settings }
+                SecondaryButton(stringResource(R.string.retro_random), compact = true, icon = Icons.Outlined.Casino) { if (sys.games.isNotEmpty()) a.onRetroGame(sys, sys.games.random()) }
+                SecondaryButton(stringResource(R.string.retro_settings), compact = true, icon = Icons.Outlined.Tune) { settings = !settings }
             }
         }
     }
@@ -157,7 +167,8 @@ internal fun RetroGallery(
         Box(modifier.padding(22.dp)) { Note(stringResource(R.string.content_rom_gone)) }
         return
     }
-    var listView by rememberSaveable { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var listView by rememberSaveable { mutableStateOf(RetroLibrary.listView(context)) } // the default from Settings
     var focusedIndex by remember(id) { mutableStateOf<Int?>(null) }
     var filter by rememberSaveable(id) { mutableStateOf(0) } // 0 all, 1 recent, 2 favourites
     val recent = remember(sys.games, s.retroStats) {
@@ -171,6 +182,13 @@ internal fun RetroGallery(
     LaunchedEffect(refocus) {
         val i = focusedIndex ?: return@LaunchedEffect
         if (refocus == 0) return@LaunchedEffect
+        repeat(10) { if (runCatching { cellFor(i).requestFocus() }.isSuccess) return@LaunchedEffect; kotlinx.coroutines.delay(50) }
+    }
+    // switching list <-> grid takes away the button pressed: put focus on the selected game in the new view
+    var switched by remember { mutableStateOf(0) }
+    LaunchedEffect(switched) {
+        if (switched == 0) return@LaunchedEffect
+        val i = focusedIndex?.takeIf { f -> shown.any { it.index == f } } ?: shown.firstOrNull()?.index ?: return@LaunchedEffect
         repeat(10) { if (runCatching { cellFor(i).requestFocus() }.isSuccess) return@LaunchedEffect; kotlinx.coroutines.delay(50) }
     }
     LaunchedEffect(id, listView) {
@@ -194,10 +212,10 @@ internal fun RetroGallery(
             modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 8.dp),
         ) {
             Text(sys.platform.name, fontSize = 22.sp, fontWeight = FontWeight.Black, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 360.dp))
-            SecondaryButton(if (listView) stringResource(R.string.retro_grid_view) else stringResource(R.string.retro_list_view), compact = true) { listView = !listView }
-            FilterChip(stringResource(R.string.retro_items, sys.games.size), filter == 0) { filter = 0 }
-            FilterChip(stringResource(R.string.retro_recent, recent.size), filter == 1) { filter = if (filter == 1) 0 else 1 }
-            FilterChip(stringResource(R.string.retro_favorites, favorites.size), filter == 2) { filter = if (filter == 2) 0 else 2 }
+            SecondaryButton(stringResource(R.string.retro_list_view), compact = true, icon = Icons.Outlined.ViewList) { listView = true; switched++ }
+            FilterChip(stringResource(R.string.retro_items, sys.games.size), filter == 0, Icons.Outlined.Apps) { filter = 0 }
+            FilterChip(stringResource(R.string.retro_recent, recent.size), filter == 1, Icons.Outlined.History) { filter = if (filter == 1) 0 else 1 }
+            FilterChip(stringResource(R.string.retro_favorites, favorites.size), filter == 2, Icons.Outlined.StarBorder) { filter = if (filter == 2) 0 else 2 }
         }
         val open: (Int) -> Unit = { i -> onSelect("rgame:${sys.platform.id}:$i") }
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -213,7 +231,7 @@ internal fun RetroGallery(
                 }
                 val sel = pick?.let { sys.games.getOrNull(it) }
                 if (sel != null) ListDetail(s, a, sys, sel, filter == 1, Modifier.weight(0.54f).fillMaxHeight(),
-                    onRecent = { filter = if (filter == 1) 0 else 1 }, onGrid = { listView = false }) { open(pick) }
+                    onRecent = { filter = if (filter == 1) 0 else 1 }, onGrid = { listView = false; switched++ }) { open(pick) }
             } else LazyVerticalGrid(
                 columns = GridCells.Adaptive(118.dp), modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
                 contentPadding = PaddingValues(bottom = 8.dp),
@@ -247,18 +265,24 @@ internal fun playedLine(st: com.droiddeck.launcher.frontend.RetroStats.Stat): St
     stringResource(R.string.retro_played, android.text.format.DateUtils.getRelativeTimeSpanString(st.last).toString(), st.count)
 
 @Composable
-private fun FilterChip(text: String, on: Boolean, onClick: () -> Unit) {
-    if (on) PrimaryButton(text, compact = true) { onClick() } else SecondaryButton(text, compact = true) { onClick() }
+private fun FilterChip(text: String, on: Boolean, icon: ImageVector, onClick: () -> Unit) {
+    if (on) PrimaryButton(text, compact = true, icon = icon) { onClick() } else SecondaryButton(text, compact = true, icon = icon) { onClick() }
 }
 
 @Composable
 private fun GalleryCell(g: Library.Rom, focused: Boolean, req: FocusRequester?, onFocus: () -> Unit, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val pal = LocalPalette.current
+    // the selected game stands out from across the room: a signal-blue frame and fill, lifted a little
+    var has by remember { mutableStateOf(false) } // focus is on this cell now; [focused] is the game last picked
+    val lift by androidx.compose.animation.core.animateFloatAsState(if (has) 1.06f else 1f, Motion.tw(160), label = "cellLift")
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.then(if (req != null) Modifier.focusRequester(req) else Modifier).padding(4.dp).clip(RoundedCornerShape(12.dp))
-            .background(if (focused) colors.surfaceVariant else Color.Transparent)
-            .onFocusChanged { if (it.isFocused) onFocus() }
+        modifier = Modifier.then(if (req != null) Modifier.focusRequester(req) else Modifier).padding(4.dp)
+            .graphicsLayer { scaleX = lift; scaleY = lift }.clip(RoundedCornerShape(12.dp))
+            .background(if (has) pal.signal.copy(alpha = 0.28f) else if (focused) colors.surfaceVariant else Color.Transparent)
+            .border(3.dp, if (has) pal.signal else Color.Transparent, RoundedCornerShape(12.dp))
+            .onFocusChanged { has = it.isFocused; if (it.isFocused) onFocus() }
             .clickable { onFocus(); onClick() }
             .padding(6.dp),
     ) {
@@ -288,7 +312,7 @@ private fun ListTitle(g: Library.Rom, favorite: Boolean, selected: Boolean, req:
     ) {
         Text(g.name, fontSize = 16.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) Color.White else colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (favorite) Text("♥", fontSize = 15.sp, color = Color(0xFFE0457B), modifier = Modifier.padding(start = 6.dp))
+        if (favorite) Icon(Icons.Filled.Star, null, tint = FavoriteGold, modifier = Modifier.padding(start = 6.dp).size(18.dp))
     }
 }
 
@@ -324,11 +348,11 @@ private fun ListDetail(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             PrimaryButton(stringResource(R.string.retro_play), compact = true, icon = Icons.Outlined.PlayArrow, enabled = sys.player != null) { a.onRetroGame(sys, g) }
-            SecondaryButton(if (favorite) stringResource(R.string.retro_remove_favorite) else stringResource(R.string.retro_add_favorite), compact = true) { a.onRetroFavorite(g) }
-            if (recentOn) PrimaryButton(stringResource(R.string.retro_recent_button), compact = true) { onRecent() }
-            else SecondaryButton(stringResource(R.string.retro_recent_button), compact = true) { onRecent() }
-            SecondaryButton(stringResource(R.string.retro_detail), compact = true) { onDetail() }
-            SecondaryButton(stringResource(R.string.retro_grid_view), compact = true) { onGrid() }
+            FavoriteStar(favorite) { a.onRetroFavorite(g) }
+            if (recentOn) PrimaryButton(stringResource(R.string.retro_recent_button), compact = true, icon = Icons.Outlined.History) { onRecent() }
+            else SecondaryButton(stringResource(R.string.retro_recent_button), compact = true, icon = Icons.Outlined.History) { onRecent() }
+            SecondaryButton(stringResource(R.string.retro_detail), compact = true, icon = Icons.Outlined.Info) { onDetail() }
+            SecondaryButton(stringResource(R.string.retro_grid_view), compact = true, icon = Icons.Outlined.GridView) { onGrid() }
         }
     }
 }
@@ -350,4 +374,15 @@ private fun GalleryRow(g: Library.Rom, detail: String, favorite: Boolean, focuse
             if (detail.isNotEmpty()) Text(detail, fontSize = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }
+}
+
+internal val FavoriteGold = Color(0xFFFFC94A)
+
+/** Favorite as a star alone: gold and filled when on, an outline when off. */
+@Composable
+internal fun FavoriteStar(on: Boolean, onClick: () -> Unit) {
+    SecondaryButton(
+        "", compact = true, icon = if (on) Icons.Filled.Star else Icons.Outlined.StarBorder, iconTint = if (on) FavoriteGold else null,
+        modifier = Modifier.semantics { contentDescription = "favorite" },
+    ) { onClick() }
 }

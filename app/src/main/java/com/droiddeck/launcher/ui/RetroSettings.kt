@@ -21,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.VideogameAsset
@@ -67,6 +69,9 @@ internal fun RetroSettingsPage(s: FrontEndState, a: FrontEndActions, modifier: M
     val rows = remember { HashMap<String, FocusRequester>() }
     val rowFor = { key: String -> rows.getOrPut(key) { FocusRequester() } }
     val first = remember { FocusRequester() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var listDefault by remember { mutableStateOf(RetroLibrary.listView(context)) }
+    var choosingView by remember { mutableStateOf(false) }
     BackHandler(enabled = page != null) {
         val from = page ?: return@BackHandler
         page = null
@@ -87,6 +92,16 @@ internal fun RetroSettingsPage(s: FrontEndState, a: FrontEndActions, modifier: M
                 SettingsHeader(stringResource(R.string.retro_library))
                 SettingRow(Icons.Outlined.VideogameAsset, stringResource(R.string.retro_emulators), stringResource(R.string.retro_systems_count, s.retro.size), rowFor("emulators")) { page = "emulators" }
                 SettingRow(Icons.Outlined.FolderOpen, stringResource(R.string.retro_paths_title), foldersLine(s), rowFor("paths")) { page = "paths" }
+                SettingsHeader(stringResource(R.string.retro_section_defaults))
+                val views = listOf(stringResource(R.string.retro_view_list), stringResource(R.string.retro_view_grid))
+                SettingRow(
+                    if (listDefault) Icons.Outlined.ViewList else Icons.Outlined.GridView, stringResource(R.string.retro_game_view),
+                    views[if (listDefault) 0 else 1], rowFor("view"),
+                ) { choosingView = true }
+                if (choosingView) RetroChoiceDialog(stringResource(R.string.retro_game_view), views, if (listDefault) 0 else 1, onPick = { i ->
+                    listDefault = i == 0
+                    RetroLibrary.setListView(context, listDefault)
+                }, onDismiss = { choosingView = false })
                 SettingsHeader(stringResource(R.string.retro_section_appearance))
                 SettingRow(Icons.Outlined.Wallpaper, stringResource(R.string.retro_wallpapers), s.retroPack ?: stringResource(R.string.retro_wallpapers_none), rowFor("wallpapers")) { page = "wallpapers" }
                 SettingsHeader(stringResource(R.string.retro_section_about))
@@ -146,37 +161,43 @@ internal fun RetroSettingsSection(s: FrontEndState, a: FrontEndActions, section:
 
 /** A system's emulator as a pop-up list, the way Retroid's own settings ask: up and down to pick, A to choose, B to close. */
 @Composable
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 internal fun RetroEmulatorDialog(sys: RetroLibrary.System, a: FrontEndActions, onDismiss: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
     val players = sys.players
     val chosen = players.indexOf(sys.player).coerceAtLeast(0)
-    val focus = remember(players.size) { List(players.size) { FocusRequester() } }
+    RetroChoiceDialog(
+        sys.platform.name, players.map { it.label }, chosen,
+        before = if (players.isEmpty()) stringResource(R.string.retro_no_player_hint, sys.platform.name,
+            sys.platform.players.map { it.label }.filter { it.isNotBlank() }.distinct().take(6).joinToString(", ")) else null,
+        after = stringResource(R.string.retro_paths_title) + ": " + sys.folders.joinToString(", ") { it.path },
+        onPick = { i -> if (i != chosen) a.onRetroPlayer(sys, players[i]) }, onDismiss = onDismiss,
+    )
+}
+
+/** A pop-up list of choices with the current one marked; picking one closes it. [before] and [after] are notes around the list. */
+@Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+internal fun RetroChoiceDialog(
+    title: String, options: List<String>, chosen: Int, before: String? = null, after: String? = null,
+    onPick: (Int) -> Unit, onDismiss: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val focus = remember(options.size) { List(options.size) { FocusRequester() } }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(sys.platform.name, fontWeight = FontWeight.Bold) },
+        title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
             // the pop-up is its own window, which starts in touch mode: switch it to the D-pad before focusing the choice
             val inputMode = androidx.compose.ui.platform.LocalInputModeManager.current
             LaunchedEffect(Unit) {
                 inputMode.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard)
-                if (focus.isNotEmpty()) focusSoon { focus[chosen] }
+                if (focus.isNotEmpty()) focusSoon { focus[chosen.coerceIn(0, focus.lastIndex)] }
             }
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (players.isEmpty()) Text(
-                    stringResource(R.string.retro_no_player_hint, sys.platform.name, sys.platform.players.map { it.label }.filter { it.isNotBlank() }.distinct().take(6).joinToString(", ")),
-                    fontSize = 14.sp, color = colors.onSurfaceVariant,
-                )
-                players.forEachIndexed { i, p ->
-                    SettingRow(null, p.label, null, focus[i], selected = i == chosen) {
-                        if (i != chosen) a.onRetroPlayer(sys, p)
-                        onDismiss()
-                    }
+                if (before != null) Text(before, fontSize = 14.sp, color = colors.onSurfaceVariant)
+                options.forEachIndexed { i, label ->
+                    SettingRow(null, label, null, focus[i], selected = i == chosen) { onPick(i); onDismiss() }
                 }
-                Text(
-                    stringResource(R.string.retro_paths_title) + ": " + sys.folders.joinToString(", ") { it.path },
-                    fontSize = 12.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, top = 10.dp),
-                )
+                if (after != null) Text(after, fontSize = 12.sp, color = colors.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp, top = 10.dp))
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_close)) } },

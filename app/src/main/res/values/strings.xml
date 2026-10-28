@@ -2389,6 +2389,10 @@
     <string name="retro_emulators">Emulators</string>
     <string name="retro_mode_keys">Ⓐ Select   Ⓑ Back   L1/R1 System   Start Settings</string>
     <string name="retro_settings_keys">Ⓐ Select   Ⓑ Library</string>
+    <string name="retro_section_defaults">Defaults</string>
+    <string name="retro_game_view">Game view</string>
+    <string name="retro_view_list">List</string>
+    <string name="retro_view_grid">Grid</string>
     <string name="retro_section_appearance">Appearance</string>
     <string name="retro_section_about">About</string>
     <string name="retro_systems_count">%1$d systems</string>
