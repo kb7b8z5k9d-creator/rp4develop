@@ -368,3 +368,86 @@ process -> title at 60 fps, no crash, no device loss.
   `wlbuild3s/waylandcomp/`. The device-loss recovery (`vkp_recover_if_lost`) was never triggered in these runs and
   stays unexercised.
 - The owner's frame-generation setting was put back to off after the test.
+
+## 2026-10-27, 14:15-14:35: LSFG Native on the Vulkan 1.1 driver (fix14)
+
+The README's "only Win-FG, LSFG needs Vulkan 1.2" limit was a switch, not a hardware wall. `framegen/lsfg/lsfg_probe.cpp`
+already had a Vulkan 1.1 route (`allowVk11`: VK_KHR_spirv_1_4 + VK_KHR_shader_float_controls + VK_KHR_vulkan_memory_model,
+modules lowered to SPIR-V 1.4), but `waylandcomp/src/framegen_engine.cpp` called it with `false`, handed the driver a
+`VkPhysicalDeviceVulkan12Features` chain (refused below 1.2), and nothing added the three extensions at device creation.
+
+What the r32p1 driver has (Android `cmd gpu vkjson` + gpuinfo report 27598): all three extensions, `vulkanMemoryModel`
++ `DeviceScope`, `shaderStorageImageWriteWithoutFormat`, `shaderStorageImageExtendedFormats`, storage/blit/colour on
+R8G8B8A8_UNORM. The DLL's shader cache (`files/lsfg/shaders-626b196d799606cd.cache`, 25 modules) is SPIR-V **1.0**
+(capabilities Shader, Float16, StorageImageExtendedFormats, ImageQuery, StorageImageWriteWithoutFormat; no memory-model
+capability), so the "lowering" is a no-op for these modules.
+
+fix14 (`build/compositor-fix14-lsfg-vk11.patch`, 6 files, ~140 lines): `allowVk11 = true`; below 1.2 the feature chain is
+`VkPhysicalDeviceVulkanMemoryModelFeaturesKHR`; new `fge_device_extensions()` → `vkp_framegen_device_extensions()` and
+`vk_present.c` appends those names to its device extension list (array grown 9 → 12).
+
+Verified 14:30-14:32 on the device (fix14 APK, prefs engine=lsfg x2, Lossless.dll already in `files/lsfg`):
+- compositor: `lsfg caps 'supported (device Vulkan 1.1.177 via extensions, SPIR-V lowered, fmt 37)'`, LSFG Native available.
+- Steam UI: HUD "LSFG 2x 10 → 19 fps". Ys Origin title: "LSFG 2x 50 → 60 fps"; `[stats] 600 frames on screen (60.0 fps)
+  | 496 GPU frames from games | 300 generated frames` per 10 s; render_scene 19-22 ms avg; no errors, no device loss.
+- On a 60 Hz panel x2 means 30 real + 30 generated frames on screen, so a game already at 50-60 fps gains smoothness
+  only in pacing; the mode pays off for games that run at 30. GPU cost of the chain is ~20 ms per generated frame here.
+
+Device state: fix14 installed, frame-generation pref left at engine=lsfg x2 (the owner loaded the DLL for it). Branch
+`rp4pro-lsfg-vk11` on DroidDeck (from upstream main) carries the change for a PR.
+
+## 2026-10-27, 15:00: upstream status
+
+- Droid-Deck/DroidDeck PRs #1692 (noexec) and #1693 (framegen) **closed by the owner's decision**: that repo's
+  `tools/release/check_authorship.py` rejects commits with an AI co-author trailer (ours carry
+  "Co-Authored-By: Claude Fable 5.1"), and stripping it to pass was not acceptable. The fixes stay on the fork
+  branches `rp4pro-noexec-arm64ec`, `rp4pro-framegen-session-reset` (+ 302fd2ad review follow-ups: scratch dropped
+  at resize, refused formats cleared at session start) and `rp4pro-lsfg-vk11`, and in the release repo.
+- ASEbrahim/MaliBridge#35 stays open (no such check there).
+- CodeRabbit's third point (narrow the `wine*` match in noexec.c) declined: on DroidDeck every Wine process is
+  the ARM64EC build with FEX inside, so the broad match is intended.
+
+## 2026-10-27 evening: Ys I & II Chronicles+ dialog crawl (5-11 fps) = FEX TSO stores into uncached bridge memory
+
+- ys1plus.exe (steam 223810, DXVK d3d9 + a Zink instance, presents through Zink) ran its main thread at 100% CPU
+  while a dialog was on screen; compositor saw 5.7 game frames/s; the bridge server spent only ~180 ms per 5 s in
+  handlers, so the GPU side was idle. simpleperf (NDK 27, run-as, `-p <pid> -f 1000 --duration 8`): 98% of samples in
+  `[anon:FEXMemJIT]`, nine PCs within 0x290 bytes with equal counts (every PC a stall).
+- Dumped the page through `/proc/<pid>/mem` (toybox dd needs `bs=4096 skip=<page>`; `adb exec-out`, not `adb shell`,
+  for binary) and disassembled with llvm-objdump (raw bytes wrapped by llvm-objcopy -I binary). The loop: for 480 rows x
+  640 px, `ldaprb` palette index, `ldapr` palette entry, then four `stlrb` (B,G,R,A) into dst = base + row*pitch + x*4,
+  alpha = (index == 255 ? 0 : 255). A paletted full-screen blit into a locked D3D9 surface, byte by byte, with
+  store-release on every byte because FEX_TSOENABLED=1 (the app's default preset). The destination is DXVK's mapping
+  buffer = the bridge's AHB shared type (uncached pages; "no coherent type takes a cached AHB" in the self-test), so
+  every stlrb drains to RAM: 1.2 M stores x ~140 ns = the ~170 ms/frame measured (ft_p50 176 ms).
+- Fix applied: per-game FEX_TSOENABLED=0 for 223810 in files/game-environment.json ("games": {"223810": {...}}) and the
+  published guest copy files/linuxfs/root/.config/droiddeck/game-environment.json (droiddeck-fex reads it at launch).
+  Backups *.bak-tso. Relaunch: title 60/60, field 59-60, the owner confirms dialog fps normal. Main thread 19% CPU.
+- Broader candidate (not done): any TSO-on game writing locked GPU memory pays this on the AHB strategy; a cached
+  AHB type for app mappings with DMA_BUF_IOCTL_SYNC at submit/wait would fix it for all games without touching FEX.
+- Home key: `adb shell input keyevent KEYCODE_HOME` opens the Steam menu on the first press (HomeActivity ->
+  SessionActivity ACTION_HOME_GUIDE -> sendSteamGuide). The physical Home key sits on the "Retroid Pocket Controller"
+  input device (event3, KEY_HOME + BTN_MODE + KEY_BACK). Single Back from adb opens the app drawer; Back double-tap from
+  adb showed nothing (timing of `input` uncertain). Waiting on the owner's physical-button results.
+- MaliBridge v0.5.4.1 (f9e1970, 2026-10-27 21:24 UTC): his RP4 Pro start fix is a guess from other users' logs
+  (linear_mod: modifier-list dma-buf images made plain LINEAR; "most likely refuses"), no twin/linear-hiding, no
+  nan_position. Useful for us: vkb_emu_device_clamp_features (DXVK 1.10.3 D3D10/11 on Vulkan 1.1), vkb_srv_env_refresh
+  (env file re-read), suspend/resume, present timeout, 12 GB heap cap. rp4pro-fixes rebased onto it as branch
+  rp4pro-fixes-0541 (b4e78ed; conflicts were keep-both in server_emu.h, server_emu_layer.c, server_errata.c,
+  vkb_server.h). Untested on device; his linear_mod path queries the real driver with the mutable flag beneath our
+  retry, so Steam start and Ys Origin need re-checking with it.
+
+### Night: button causes found; TO-DO list
+
+- Home needing two presses: Retroid system setting `prevent_press_home_accidentally=1` (rp3settings owns the key;
+  getevent sees no KEY_HOME; a toast per press). `adb shell settings put system prevent_press_home_accidentally 0`.
+- Quick-access panel / three-dots / double-Back / hold-Back chords: DroidDeck "Steam controller" was Xbox 360
+  (no QAM button; the app's Guide+A chord fallback does nothing). Set to Steam Deck: VERIFIED working.
+- DXVK 1.10.3 and current never call vkFlush/InvalidateMappedMemoryRanges: a cached host type for apps needs the
+  bridge to do the cache maintenance itself.
+
+TO-DO (order agreed): 1 cache-cost probe for the general cached-memory bridge fix (else pre-apply TSO off to the
+other Ys games); 2 test fix15 (rebased bridge on v0.5.4.1: Steam start, Ys Origin, Ys I), then push/update #35;
+3 nan_position startup probe; 4 full v0.5.4.1-based build (source tarball, compositor rebuild); 5 32-bit DXVK D3D8
+for Ys Origin; 6 library pass, sleep/resume + device-loss test, 1080p, battery Win-FG vs LSFG, update prompt,
+Guide+A chord fallback bug.
