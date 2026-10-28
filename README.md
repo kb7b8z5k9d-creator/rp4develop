@@ -154,8 +154,6 @@ Steam's **Quick Access** menu, the same as on a Steam Deck.
 
 ### Other tips
 
-- **Steam says "Unable to Sync" when you launch a game.** The device is offline (Wi-Fi off). **Play anyway**
-  starts the game normally; only the cloud saves for that session wait until you're back online.
 - **A game crawls in menus or dialog scenes while its main thread sits at 100% CPU.** Seen in Ys I & II
   Chronicles+: the game converts a paletted 640x480 image into a locked Direct3D surface one byte at a time, and
   FEX's x86 memory-ordering emulation (TSO) turns every byte into a store-release into the bridge's uncached
