@@ -1,1 +1,0 @@
-arcade-titles.tsv: set name, title, year, manufacturer, genre - from the MAME 2003-Plus metadata (github.com/libretro/mame2003-plus-libretro: metadata/mame2003-plus.xml, metadata/catver.ini).

@@ -1696,6 +1696,9 @@ class MainActivity : ComponentActivity() {
             if (!OfflineMode.enabled(this) && online()) {
                 // game info (year, genre, developer) for platforms whose metadata is missing or a month old
                 var fetched = false
+                // arcade titles, years and genres: the MAME 2003-Plus metadata, downloaded once
+                if (retro.any { com.droiddeck.launcher.frontend.RetroLibrary.isArcade(it.platform.id) } && !com.droiddeck.launcher.frontend.ArcadeTitles.cached(this))
+                    fetched = com.droiddeck.launcher.frontend.ArcadeTitles.fetch(this) || fetched
                 for (sys in retro) {
                     if (sys.platform.id in com.droiddeck.launcher.frontend.NoIntro.platforms && !com.droiddeck.launcher.frontend.NoIntro.fresh(this, sys.platform.id))
                         fetched = com.droiddeck.launcher.frontend.NoIntro.fetch(this, sys.platform) || fetched

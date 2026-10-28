@@ -84,15 +84,21 @@ object RetroLibrary {
 
     private val arcade = setOf("mame", "neogeo", "fbneo", "cps1", "cps2", "cps3", "mame2003", "arcade")
 
+    fun isArcade(platform: String) = platform in arcade
+
     private class ArcadeSet(val title: String, val info: GameInfo.Info)
 
     @Volatile private var arcadeSets: Map<String, ArcadeSet>? = null
+    @Volatile private var arcadeStamp = 0L
 
-    /** MAME and FinalBurn sets: title, year, maker, genre (assets/retro/arcade-titles.tsv, from the MAME 2003-Plus metadata). */
+    /** MAME and FinalBurn sets: title, year, maker, genre (ArcadeTitles' download; until then the set name is shown). */
     private fun arcadeSet(context: Context, set: String): ArcadeSet? {
+        val f = ArcadeTitles.file(context)
+        val stamp = if (f.isFile) f.lastModified() else 0L
+        if (stamp != arcadeStamp) synchronized(this) { if (stamp != arcadeStamp) { arcadeSets = null; arcadeStamp = stamp } }
         val map = arcadeSets ?: synchronized(this) {
             arcadeSets ?: runCatching {
-                context.assets.open("retro/arcade-titles.tsv").bufferedReader().useLines { lines ->
+                f.bufferedReader().useLines { lines ->
                     lines.mapNotNull { l ->
                         val p = l.split('\t')
                         if (p.size < 2) null else p[0] to ArcadeSet(p[1], GameInfo.Info(
