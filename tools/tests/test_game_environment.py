@@ -1340,3 +1340,39 @@ class ForceSsbsTest(unittest.TestCase):
                 self.assertEqual(MODULE["force_ssbs"]([str(x86 / "proton")], on), on)
             finally:
                 g["SSBS_LIB"] = old
+
+
+class FastCoresFirstTest(unittest.TestCase):
+    def cpus(self, tmp, clocks):
+        for cpu, khz in enumerate(clocks):
+            freq = Path(tmp) / ("cpu%d" % cpu) / "cpufreq"
+            freq.mkdir(parents=True)
+            (freq / "cpuinfo_max_freq").write_text("%d\n" % khz)
+        return Path(tmp)
+
+    def test_windows_cpu_0_is_a_fast_core(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cpus = self.cpus(tmp, [2000000] * 4 + [2600000] * 4)
+            env = {}
+            self.assertIn("8:4,5,6,7,0,1,2,3", MODULE["fast_cores_first"](env, cpus))
+            self.assertEqual(env["WINE_CPU_TOPOLOGY"], "8:4,5,6,7,0,1,2,3")
+
+    def test_three_clusters_fastest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cpus = self.cpus(tmp, [1800000] * 4 + [2850000] * 3 + [3600000])
+            env = {}
+            MODULE["fast_cores_first"](env, cpus)
+            self.assertEqual(env["WINE_CPU_TOPOLOGY"], "8:7,4,5,6,0,1,2,3")
+
+    def test_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            big = self.cpus(tmp + "/big", [2000000] * 4 + [2600000] * 4)
+            same = self.cpus(tmp + "/same", [2400000] * 8)
+            first = self.cpus(tmp + "/first", [3000000] + [2000000] * 3)
+            gap = self.cpus(tmp + "/gap", [2000000, 2600000])
+            (gap / "cpu1").rename(gap / "cpu2")
+            for env, cpus in (({"WINE_CPU_TOPOLOGY": "4:0,1,2,3"}, big), ({"BL_GAME_CPUS": "4-7"}, big),
+                              ({"BL_FAST_CORES_FIRST": "0"}, big), ({}, same), ({}, first), ({}, gap)):
+                before = dict(env)
+                self.assertIsNone(MODULE["fast_cores_first"](env, cpus))
+                self.assertEqual(env, before)

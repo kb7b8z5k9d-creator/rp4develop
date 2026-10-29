@@ -367,6 +367,31 @@ def bridge_feature_level(env):
     return "Mali bridge: VKD3D_FEATURE_LEVEL %s capped at 12_0 (no ray tracing or mesh shaders)" % was
 
 
+def fast_cores_first(env, cpus=Path("/sys/devices/system/cpu")):
+    """Windows CPU 0 on a fast core. Older PC games pin their main thread to CPU 0, the fastest core on
+    a PC; on a phone chip cpu0 is a little core (Tales of Symphonia: 15 fps in battle on a Cortex-A55,
+    30 on an A78). WINE_CPU_TOPOLOGY numbers the cores fastest first, from the device's own clocks;
+    games that pin nothing are unaffected. Skipped when the game or the player set
+    WINE_CPU_TOPOLOGY, chose the game cores (BL_GAME_CPUS), or set BL_FAST_CORES_FIRST=0.
+    Returns a note when it set something."""
+    if env.get("WINE_CPU_TOPOLOGY") or env.get("BL_GAME_CPUS") or env.get("BL_FAST_CORES_FIRST") == "0":
+        return None
+    clocks = {}
+    for path in cpus.glob("cpu[0-9]*/cpufreq/cpuinfo_max_freq"):
+        try:
+            clocks[int(path.parent.parent.name[3:])] = int(path.read_text())
+        except (OSError, ValueError):
+            return None
+    # Wine wants every host CPU 0..n-1 in the mapping; a gap means a core it can't place.
+    if sorted(clocks) != list(range(len(clocks))) or len(set(clocks.values())) < 2:
+        return None
+    order = sorted(clocks, key=lambda cpu: (-clocks[cpu], cpu))
+    if clocks[order[0]] == clocks[0]:
+        return None
+    env["WINE_CPU_TOPOLOGY"] = "%d:%s" % (len(order), ",".join(map(str, order)))
+    return "fast cores first: WINE_CPU_TOPOLOGY=" + env["WINE_CPU_TOPOLOGY"]
+
+
 def sync_config(config, app_id):
     games = config.get("games", {})
     return {
@@ -602,6 +627,10 @@ def main():
         # After the configuration: a fix that only adds to the player's value says whether it did.
         for note in notes:
             print("droiddeck-game-env: " + note.line(kept), file=sys.stderr)
+        if waiting:
+            cores = fast_cores_first(env)
+            if cores:
+                print("droiddeck-game-env: " + cores, file=sys.stderr)
     if mic_enabled == "0":
         env["BANNER_AUDIO_DIRECT_MIC"] = "0"
     note = bridge_feature_level(env)
