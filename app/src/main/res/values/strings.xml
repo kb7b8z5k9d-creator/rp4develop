@@ -2431,4 +2431,5 @@
     <string name="retro_recent_button">Recent</string>
     <string name="retro_list_status">%1$s platform. %2$d of %3$d</string>
     <string name="retro_credit">Systems and emulator launch settings from Daijishō (MIT)</string>
+    <string name="stores_engine_missing">%1$s is not available in this build yet: its store engine is not included</string>
 </resources>
