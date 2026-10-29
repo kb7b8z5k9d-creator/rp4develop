@@ -1,3 +1,1 @@
-# The RP4 Pro build's release tag (fixNN on github.com/yujikaido/droiddeck-rp4pro), BuildConfig.RP4PRO_RELEASE.
-# The in-app updater compares it with that repository's newest release; raise it with each release.
-fix43
+fix44
