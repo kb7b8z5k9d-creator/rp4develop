@@ -12,26 +12,32 @@ Claude Code, so they live on the fork branches below instead. Maintainers are we
 Tested on my personal Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
 
-## Coming soon
+## New in fix42
 
-The current download is still fix14 on v0.5.4. The next build is being tested on my RP4 Pro now, and I'll post
-it once it holds up in real play:
+fix42 is built from source on DroidDeck Mali v0.5.4.1, so it replaces the whole app. It's signed with the same
+personal debug key as fix14, so it installs over it.
+
+![The Retro start screen](screenshots/13-retro-start-screen.jpg)
 
 - **Rebased on DroidDeck Mali v0.5.4.1.** The bridge fixes now sit on top of ASEbrahim's v0.5.4.1 release. Steam,
   Ys I, Ys Origin's rooms and sleep/resume have been checked on it.
 - **A Retro tab.** A front end for your emulators, built into DroidDeck so Steam games and retro games live in
-  one place (inspired by Daijishō, see Credits). It shows a carousel of systems, then each system's games as a
-  box-art grid or as a list with a screenshot of the selected game. It picks up your existing `Roms` folders
-  on internal storage and the SD card. Covers,
-  screenshots and game info (genre, year, developer) come from libretro's databases, and PSP, GameCube and
-  cartridge games are named from the disc or a checksum rather than the file name. Each system has a Settings
-  panel where you choose its emulator (RetroArch cores, PPSSPP, Dolphin, DraStic and so on) and see its
-  folders. It also has favorites, recently played, and L1/R1 to jump between systems.
+  one place (inspired by Daijishō, see Credits). Retro in the side bar opens a start screen like Steam's: covers
+  from your own library drift past, with **Play Retro Games** and a Settings sheet. Play opens retro mode over
+  the whole screen, with two tabs:
+  - **Library:** a card per system. L1/R1, or D-pad down to the systems strip and then left/right, flips
+    between them. A system's games open as a list (the selected game's screenshot or cover beside the titles;
+    Ⓧ switches between the two) or as a box-art grid. B steps back one level at a time.
+  - **Settings:** each system's emulator in a pop-up list (RetroArch cores, My Boy!, PPSSPP, Dolphin, DraStic
+    and so on), your ROM folders, the default view (list or grid) and list picture, and wallpaper packs.
+
+  It picks up your existing `Roms` folders on internal storage and the SD card. Covers, screenshots and game
+  info (genre, year, developer) come from libretro's databases, and PSP, GameCube and cartridge games are named
+  from the disc or a checksum rather than the file name. It has favorites (★) and recently played. Every game
+  starts fresh: an emulator left running in the background is closed first, so a new game never comes up as
+  the old one or a black screen, and Home from a game brings you back to retro mode where you were.
 - **An opt-in cached memory switch** for games that write to GPU memory one byte at a time (see Device tips).
   It's off unless you turn it on for a game.
-
-Since the app itself is now built from source rather than patched, the next APK replaces the whole app. The
-signing key is the same personal debug key, so it installs over fix14.
 
 ## What is fixed
 
@@ -96,9 +102,9 @@ whether the game is on internal storage or the SD card, and the frame-generation
 
 ## Installing
 
-`DroidDeck-MaliBridge-v0.5.4-rp4pro-fix14.apk` (on the [Releases](../../releases) page; fix13 is the same without the LSFG change) is the stock v0.5.4 APK with three libraries replaced
-(the bridge server, the compositor, and the Linux-side preload), signed with a **personal debug key**, not the
-author's. Because of that:
+`DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix42.apk` (on the [Releases](../../releases) page) is DroidDeck Mali
+v0.5.4.1 built from source with these fixes and the Retro tab. fix14, the earlier build on v0.5.4, is still
+there too. Both are signed with a **personal debug key**, not the author's. Because of that:
 
 - If you have the official DroidDeck Mali installed, **uninstall it first**. Android refuses to install over
   a different signature. You lose the app's settings and have to sign in to Steam again; your Steam library
@@ -107,6 +113,12 @@ author's. Because of that:
   When the fixes land upstream, uninstall this and go back to the official APK.
 
 ## What is inside
+
+fix42 is built whole from this repository's [`source`](../../tree/source) branch: ASEbrahim's DroidDeck Mali
+v0.5.4.1 source release, with MaliBridge `rp4pro-fixes` in `external/MaliBridge`, the compositor fixes from
+fix13 and fix14, and the Retro tab, one commit per change.
+
+fix14 and earlier were the stock v0.5.4 APK with three libraries replaced:
 
 | Part | Built from |
 |---|---|
@@ -136,8 +148,8 @@ Settings on the device itself, not in the APK.
 
 ### Make the Home button work like the Steam button
 
-Out of the box, Home on the RP4 Pro needs two presses and there's no Quick Access menu. These three settings
-fix that; all three are set on my RP4 Pro and confirmed working:
+Out of the box, Home on the RP4 Pro needs two presses and there's no Quick Access menu. These four settings
+fix that; all four are set on my RP4 Pro and confirmed working:
 
 1. **Make DroidDeck the Home app.** In DroidDeck: **Setup → Use as Home screen** on, then **Default Home app →
    Choose → DroidDeck**.
@@ -148,6 +160,10 @@ fix that; all three are set on my RP4 Pro and confirmed working:
    set **Controller** to **Steam Deck controller** (it's also in the side panel during a session). It applies
    from the next Steam session. As the default Xbox 360 controller, the pad has no Quick Access button, so the
    three dots in the side panel do nothing.
+4. **Keep Retroid's Controller style on Retro.** In Retroid's **Handheld settings → Input → Controller style**,
+   choose **Retro**. With **XBox**, the Home key reaches apps as a keyboard key and Home stops working
+   everywhere: in DroidDeck, in Steam and in emulators. Quick Settings has a Controller style tile too, so if
+   Home suddenly stops working, check that it wasn't switched there.
 
 After that, **one press of Home opens the Steam menu**, and the **three dots** in DroidDeck's side panel open
 Steam's **Quick Access** menu, the same as on a Steam Deck.
@@ -160,7 +176,7 @@ Steam's **Quick Access** menu, the same as on a Steam Deck.
   shared memory, about 160 ms a frame. Set that game's FEX preset to **Performance** (TSO off) in its game
   profile. It's a per-game setting and nothing else changes. Old single-threaded games take it well; games
   with lock-free threading may not, so try it per game.
-  The next build adds a second option for games that need TSO kept on: `VKBRIDGE_CACHED_UPLOAD=1` in that
+  fix42 adds a second option for games that need TSO kept on: `VKBRIDGE_CACHED_UPLOAD=1` in that
   game's bridge preset gives it cached memory, and the bridge does the cache cleaning itself, since DXVK never
   flushes host memory. That cleaning costs about 3 ms per submit at the default 64 MB budget
   (`VKBRIDGE_CACHED_UPLOAD_MB`), so it's off by default, and for Ys I TSO off is still the better fix.
@@ -174,11 +190,20 @@ Steam's **Quick Access** menu, the same as on a Steam Deck.
   - Keep **"Clean process when standby"** off, or whitelist DroidDeck, so sleep doesn't end your Steam session.
   - **Docked to a TV:** DisplayPort over USB-C goes up to 1080p120 (needs a reboot after changing it), and
     "Disable auto sleep when HDMI/DP connected" keeps the screen on. Not tested with DroidDeck yet.
+- **Retro tab emulators.**
+  - A RetroArch core has to be downloaded in RetroArch first (**Online Updater → Core Downloader**). The Retro
+    tab can't see which cores RetroArch has, so choose one you've downloaded.
+  - RetroArch 32 is left out of the lists when RetroArch 64 is installed. It's a second, separate RetroArch with
+    its own cores and settings, and one that was never set up plays every game as a black screen.
+  - For GBA, My Boy! works. If it shows a **Syncing** box at each start, its Google Drive sync needs your
+    approval again in My Boy!'s settings (or turn its sync off); **Skip** plays without syncing.
 
 ## Source and commit history
 
-This repository holds the build, the write-ups and the evidence. The code changes themselves, with their
-history, are on branches of the two forks, where each commit is one fix with its reasoning in the message:
+This repository holds the build, the write-ups and the evidence. The app that fix42 is built from is on this
+repository's **[`source`](../../commits/source)** branch: the v0.5.4.1 source release as its first commit, then
+one commit per change, the Retro tab included. The bridge and compositor fixes, with their history, are also on
+branches of the two forks, where each commit is one fix with its reasoning in the message:
 
 **[yujikaido/MaliBridge](https://github.com/yujikaido/MaliBridge/commits/rp4pro-fixes), branch `rp4pro-fixes`**
 (now on v0.5.4.1; the v0.5.4 version that fix14 was built from is kept as `rp4pro-fixes-v054`). PR
@@ -215,6 +240,7 @@ rooms, then the second launch. The pull requests in `docs/` tell each story in f
 | `patches/` | the compositor and frame-generation patches against the `mali-test-build` fork |
 | `tools/` | the Vulkan probes run inside the DroidDeck rootfs during the investigation (`vk*.py`), the apitrace frame replay (`ys_replay.py`), and the preload build / APK repack scripts |
 | `docs/` | the pull-request write-ups sent upstream, and [`PROGRESS-LOG.md`](docs/PROGRESS-LOG.md), the day-by-day investigation log |
+| branch [`source`](../../tree/source) | the whole app fix42 is built from (DroidDeck Mali v0.5.4.1 with the fixes and the Retro tab) |
 
 ## Credits
 
@@ -226,7 +252,7 @@ and reports from other RP4 Pro owners go to this repository's Issues.
 [ASEbrahim](https://github.com/ASEbrahim) for MaliBridge and DroidDeck Mali, and
 [Droid-Deck](https://github.com/Droid-Deck/DroidDeck) for DroidDeck, which this build is made from.
 
-The Retro tab (next build) was inspired by [Daijishō](https://github.com/TapiocaFox/Daijishou) by TapiocaFox, a
+The Retro tab was inspired by [Daijishō](https://github.com/TapiocaFox/Daijishou) by TapiocaFox, a
 great emulator front end for Android, and the one I used before this. The Retro tab's code is new, written for
 this build; Daijishō's app is closed source and none of its code is used. What the Retro tab does use from the
 Daijishō project, with thanks:
