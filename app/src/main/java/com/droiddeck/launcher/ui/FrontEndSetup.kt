@@ -535,6 +535,10 @@ internal fun LaunchSettings(s: FrontEndState, a: FrontEndActions, host: MenuHost
                 StoreLaunchCard(host, game.gameFiles!!, cardStore)
             }
         }
+        val aaGame = game?.takeIf { it.library != com.droiddeck.launcher.frontend.Library.ADDED && it.appId > 0 }
+        if (aaGame != null && com.droiddeck.launcher.frontend.GameAntiAliasing.known.containsKey(aaGame.appId.toLong())) add { m ->
+            AntiAliasingCard(aaGame, m)
+        }
         if (wincompKey != null) add { m ->
             SettingCard(
                 stringResource(R.string.wincomp_title),
@@ -556,6 +560,33 @@ internal fun LaunchSettings(s: FrontEndState, a: FrontEndActions, host: MenuHost
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
+}
+
+/** The game's own anti-aliasing setting (GameAntiAliasing): 4x or off, from the game's next start. */
+@Composable
+private fun AntiAliasingCard(game: com.droiddeck.launcher.frontend.Library.SteamGame, modifier: Modifier) {
+    val aa = com.droiddeck.launcher.frontend.GameAntiAliasing
+    var on by remember(game.appId) { mutableStateOf<Boolean?>(null) }
+    var read by remember(game.appId) { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(game.appId) {
+        on = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { aa.state(game.appId.toLong(), game.protonPrefix) }
+        read = true
+    }
+    val value = stringResource(when {
+        !read -> R.string.games_aa_reading
+        on == null -> R.string.games_aa_unset
+        on == true -> R.string.games_aa_on
+        else -> R.string.games_aa_off
+    })
+    SettingCard(stringResource(R.string.games_aa_title), value, "card:aa", modifier) {
+        val now = on ?: return@SettingCard
+        Thread({
+            val written = runCatching { aa.set(game.appId.toLong(), game.protonPrefix, !now) }
+                .onFailure { android.util.Log.w("GameAntiAliasing", "could not set ${game.appId}: ${it.message}") }.getOrNull()
+            android.util.Log.i("GameAntiAliasing", "app ${game.appId}: anti-aliasing ${if (written == true) "on" else if (written == false) "off" else "unchanged"}")
+            com.droiddeck.launcher.stores.StoresState.post { on = written ?: now }
+        }, "game-aa").start()
     }
 }
 

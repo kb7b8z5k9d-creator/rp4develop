@@ -1091,6 +1091,11 @@
     <string name="games_launch">Launch</string>
     <string name="games_files">Game files</string>
     <string name="games_prefix">Proton prefix</string>
+    <string name="games_aa_title">Anti-aliasing</string>
+    <string name="games_aa_on">4x · smoother</string>
+    <string name="games_aa_off">Off · faster</string>
+    <string name="games_aa_unset">Start the game once first</string>
+    <string name="games_aa_reading">…</string>
     <string name="games_saves_looking">Looking for saves…</string>
     <string name="games_saves_none">No save folder found by name. Export takes the whole user folder.</string>
     <string name="games_saves_folders">%1$d save folders</string>
