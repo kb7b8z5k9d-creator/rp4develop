@@ -69,15 +69,26 @@ object Platforms {
         }
     }
 
-    /** The players whose emulator is installed, in Daijishō's order (its first is the usual choice). */
+    private const val RETROARCH_64 = "com.retroarch.aarch64"
+    private const val RETROARCH_32 = "com.retroarch.ra32"
+
+    /**
+     * The players whose emulator is installed, in Daijishō's order (its first is the usual choice). On a 64-bit device
+     * with RetroArch 64 installed, RetroArch 32's cores are left out: they run in a second, separately set-up RetroArch
+     * (its own cores and settings), and one never opened plays every game as a black screen.
+     */
     fun installedPlayers(context: Context, platform: Platform): List<Player> {
         val pm = context.packageManager
         val have = HashMap<String, Boolean>()
-        return platform.players.filter { p ->
-            val pkg = p.pkg ?: return@filter false
+        val installed = { pkg: String ->
             have.getOrPut(pkg) {
                 try { pm.getPackageInfo(pkg, 0); true } catch (e: PackageManager.NameNotFoundException) { false }
             }
+        }
+        val skip32 = android.os.Build.SUPPORTED_64_BIT_ABIS.isNotEmpty() && installed(RETROARCH_64)
+        return platform.players.filter { p ->
+            val pkg = p.pkg ?: return@filter false
+            installed(pkg) && !(skip32 && pkg == RETROARCH_32)
         }.onEach { p ->
             if (p.appLabel == null) p.appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(p.pkg!!, 0)).toString() }.getOrNull()
         }
