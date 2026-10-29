@@ -12,10 +12,14 @@ Claude Code, so they live on the fork branches below instead. Maintainers are we
 Tested on my personal Retroid Pocket 4 Pro only. The fixes switch themselves on for the r32 Mali driver, so the build
 is safe on other phones, but nothing else has been tested on them.
 
-## New in fix42
+## New in fix42 and fix43
 
 fix42 is built from source on DroidDeck Mali v0.5.4.1, so it replaces the whole app. It's signed with the same
 personal debug key as fix14, so it installs over it.
+
+**fix43: updates from this repository.** The app's **Updates** page now follows this repository's releases.
+Before, it offered the official MaliBridge APKs, which won't install over this build (another signing key) and
+leave out these fixes. On fix42 or older, install fix43 by hand once; after that, new builds show up in Updates.
 
 ![The Retro start screen](screenshots/13-retro-start-screen.jpg)
 
@@ -38,6 +42,14 @@ personal debug key as fix14, so it installs over it.
   the old one or a black screen, and Home from a game brings you back to retro mode where you were.
 - **An opt-in cached memory switch** for games that write to GPU memory one byte at a time (see Device tips).
   It's off unless you turn it on for a game.
+
+### Games and BIOS files
+
+The Retro tab is a front end only. It doesn't include, download or link to any games or BIOS files; it plays the
+ROM folders you already have, in emulators you install yourself. Only use games and BIOS files you have the
+right to use, such as copies of cartridges and discs you own; the rules differ from country to country. What
+the Retro tab downloads is artwork and game information (box art, screenshots, names, genres) from libretro's
+public databases, never the games themselves.
 
 ## What is fixed
 
@@ -102,7 +114,7 @@ whether the game is on internal storage or the SD card, and the frame-generation
 
 ## Installing
 
-`DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix42.apk` (on the [Releases](../../releases) page) is DroidDeck Mali
+`DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk` (on the [Releases](../../releases) page) is DroidDeck Mali
 v0.5.4.1 built from source with these fixes and the Retro tab. fix14, the earlier build on v0.5.4, is still
 there too. Both are signed with a **personal debug key**, not the author's. Because of that:
 
@@ -114,7 +126,7 @@ there too. Both are signed with a **personal debug key**, not the author's. Beca
 
 ## What is inside
 
-fix42 is built whole from this repository's [`source`](../../tree/source) branch: ASEbrahim's DroidDeck Mali
+fix42 and later are built whole from this repository's [`source`](../../tree/source) branch: ASEbrahim's DroidDeck Mali
 v0.5.4.1 source release, with MaliBridge `rp4pro-fixes` in `external/MaliBridge`, the compositor fixes from
 fix13 and fix14, and the Retro tab, one commit per change.
 
@@ -200,7 +212,7 @@ Steam's **Quick Access** menu, the same as on a Steam Deck.
 
 ## Source and commit history
 
-This repository holds the build, the write-ups and the evidence. The app that fix42 is built from is on this
+This repository holds the build, the write-ups and the evidence. The app that fix43 is built from is on this
 repository's **[`source`](../../commits/source)** branch: the v0.5.4.1 source release as its first commit, then
 one commit per change, the Retro tab included. The bridge and compositor fixes, with their history, are also on
 branches of the two forks, where each commit is one fix with its reasoning in the message:
@@ -240,7 +252,7 @@ rooms, then the second launch. The pull requests in `docs/` tell each story in f
 | `patches/` | the compositor and frame-generation patches against the `mali-test-build` fork |
 | `tools/` | the Vulkan probes run inside the DroidDeck rootfs during the investigation (`vk*.py`), the apitrace frame replay (`ys_replay.py`), and the preload build / APK repack scripts |
 | `docs/` | the pull-request write-ups sent upstream, and [`PROGRESS-LOG.md`](docs/PROGRESS-LOG.md), the day-by-day investigation log |
-| branch [`source`](../../tree/source) | the whole app fix42 is built from (DroidDeck Mali v0.5.4.1 with the fixes and the Retro tab) |
+| branch [`source`](../../tree/source) | the whole app fix43 is built from (DroidDeck Mali v0.5.4.1 with the fixes and the Retro tab) |
 
 ## Credits
 
