@@ -92,7 +92,9 @@ object AndroidLaunch {
             data != null -> intent.data = data
             type != null -> intent.type = type
         }
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // a new task, cleared: Android keeps an emulator's old task and would rebuild it with the game it had. The
+        // emulator's process is closed first (MainActivity.launchRetro); clearing a live RetroArch makes it hang.
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         uri?.let { u ->
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             if (intent.clipData == null) intent.clipData = ClipData.newRawUri(rom.name, u)

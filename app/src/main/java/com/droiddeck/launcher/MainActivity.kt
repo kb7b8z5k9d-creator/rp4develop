@@ -1764,14 +1764,20 @@ class MainActivity : ComponentActivity() {
             return
         }
         android.util.Log.i("Retro", "${sys.platform.id}: ${rom.hostPath} in ${player.id}: ${launch.intent}")
-        try {
-            startActivity(launch.intent)
-            com.droiddeck.launcher.frontend.RetroStats.played(this, rom.hostPath.path)
-            retroStats = com.droiddeck.launcher.frontend.RetroStats.all(this)
-        } catch (e: Exception) {
-            android.util.Log.w("Retro", "launch failed: $e")
-            android.widget.Toast.makeText(this, getString(R.string.retro_launch_failed, player.label), android.widget.Toast.LENGTH_LONG).show()
-        }
+        // an emulator left running a game (Home out of it) keeps that game, or shows black, and never reads the new
+        // one: RetroArch takes its ROM only as its process starts. Close it first so every game starts fresh; it is in
+        // the background and paused, and RetroArch has written the game's save on its autosave interval.
+        player.pkg?.let { pkg -> runCatching { (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).killBackgroundProcesses(pkg) } }
+        ui.postDelayed({
+            try {
+                startActivity(launch.intent)
+                com.droiddeck.launcher.frontend.RetroStats.played(this, rom.hostPath.path)
+                retroStats = com.droiddeck.launcher.frontend.RetroStats.all(this)
+            } catch (e: Exception) {
+                android.util.Log.w("Retro", "launch failed: $e")
+                android.widget.Toast.makeText(this, getString(R.string.retro_launch_failed, player.label), android.widget.Toast.LENGTH_LONG).show()
+            }
+        }, 300)
     }
 
     private fun onRuntimeButton() {
