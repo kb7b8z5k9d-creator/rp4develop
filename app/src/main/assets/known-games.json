@@ -28,6 +28,14 @@
     "source": "Player report, OnePlus Ace 2V (Mali-G710, Vulkan 1.1): plays with DXVK 1.10.3; Proton's own DXVK needs Vulkan 1.3."
    }
   ],
+  "207320": [
+   {
+    "name": "Ys: The Oath in Felghana",
+    "when": {"bridge": true},
+    "env": {"WINEDLLOVERRIDES": "d3dx9_41,d3dx9_43=b"},
+    "source": "Tested on a Retroid Pocket 4 Pro (Mali-G77, r32p1): the DirectX 9 version draws only the HUD after a save loads; an apitrace shows every world matrix (c24-c31) as NaN from Microsoft's own d3dx9 under FEX. Wine's builtin d3dx9_41/43 draws the world at 69 fps."
+   }
+  ],
   "560430": [
    {
     "name": "Indiana Jones and the Emperor's Tomb",
