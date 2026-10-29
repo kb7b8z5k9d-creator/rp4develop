@@ -44,6 +44,14 @@
     "source": "Tested on a Retroid Pocket 4 Pro (Mali-G77, r32p1): the DirectX 9 version draws only the HUD after a save loads; an apitrace shows every world matrix (c24-c31) as NaN from Microsoft's own d3dx9 under FEX. Wine's builtin d3dx9_41/43 draws the world at 69 fps."
    }
   ],
+  "372360": [
+   {
+    "name": "Tales of Symphonia",
+    "when": {"bridge": true},
+    "env": {"WINE_CPU_TOPOLOGY": "8:4,5,6,7,0,1,2,3"},
+    "source": "Tested on a Retroid Pocket 4 Pro (Dimensity 1100: cpu0-3 Cortex-A55, cpu4-7 Cortex-A78): TOS.exe pins its main thread to CPU 0, which is a little core here; battles ran 15 fps with that thread at 91 % and the GPU 11-23 % busy. Moved to a big core: a steady 30 fps (the game's cap). The mapping makes Windows CPU 0-3 the big cores."
+   }
+  ],
   "560430": [
    {
     "name": "Indiana Jones and the Emperor's Tomb",
