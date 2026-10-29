@@ -36,15 +36,17 @@ object MaliUpdater {
     private const val KEY_READY_TAG = "ready_tag"
     private const val KEY_SELF_HASH = "self_hash"
     private const val KEY_SELF_HASH_AT = "self_hash_at"
+    private const val KEY_REPO = "repo"
     private const val DIR = "mali-updates"
     private const val USER_AGENT = "DroidDeck-Mali-app"
 
     val repo: String get() = BuildConfig.UPDATES_REPO
 
-    /** True for the .mali build: its Updates tab follows MaliBridge's releases. */
+    /** True for the .mali build: its Updates tab follows the releases of [repo]. */
     val forThisBuild: Boolean get() = repo.isNotBlank()
 
-    val installedTag: String get() = BuildConfig.MALI_RELEASE
+    /** This APK's release: the RP4 Pro build's fix number (fix43) when it has one, else the MaliBridge release. */
+    val installedTag: String get() = BuildConfig.RP4PRO_RELEASE.ifBlank { BuildConfig.MALI_RELEASE }
 
     fun enabled(context: Context) = prefs(context).getBoolean(KEY_ENABLED, true)
     fun setEnabled(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_ENABLED, on).apply()
@@ -302,5 +304,26 @@ object MaliUpdater {
         })
     }
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    @Volatile private var repoChecked = false
+
+    /**
+     * The updater's preferences. A check saved while the app followed another repository (an update that moved it
+     * from ASEbrahim/MaliBridge to this build's own releases) is dropped, with its checksum and downloaded APK, so the
+     * page never offers the other repository's release; the on/off switches stay.
+     */
+    private fun prefs(context: Context): android.content.SharedPreferences {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!repoChecked) synchronized(this) {
+            if (!repoChecked) {
+                if (p.getString(KEY_REPO, null) != repo) {
+                    p.edit().remove(KEY_LAST_CHECK).remove(KEY_BLOCKED_UNTIL).remove(KEY_RETRY_AT).remove(KEY_ETAG)
+                        .remove(KEY_RELEASE).remove(KEY_SHA).remove(KEY_SHA_TAG).remove(KEY_READY_TAG)
+                        .putString(KEY_REPO, repo).apply()
+                    dir(context).deleteRecursively()
+                }
+                repoChecked = true
+            }
+        }
+        return p
+    }
 }

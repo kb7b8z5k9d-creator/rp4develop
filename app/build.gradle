@@ -115,11 +115,12 @@ if (appLabel) {
     android.sourceSets.debug.res.srcDir(labelRes)
     android.sourceSets.release.res.srcDir(labelRes)
 }
-// In-app updates for the MaliBridge build (applicationId ending in .mali): the app follows the
-// releases of this GitHub repository instead of DroidDeck's catalog. DROIDDECK_UPDATES_REPO
+// In-app updates for the MaliBridge build (applicationId ending in .mali): the app follows the releases of this
+// GitHub repository instead of DroidDeck's catalog. For this RP4 Pro build that is its own repository: the official
+// MaliBridge APKs are signed with another key and leave out these fixes. DROIDDECK_UPDATES_REPO
 // (-Pdroiddeck.updatesRepo) names another owner/repo; empty for every other build.
 def maliUpdatesRepo = buildSetting('DROIDDECK_UPDATES_REPO', 'droiddeck.updatesRepo') ?:
-    (droiddeckApplicationId.endsWith('.mali') ? 'ASEbrahim/MaliBridge' : '')
+    (droiddeckApplicationId.endsWith('.mali') ? 'yujikaido/droiddeck-rp4pro' : '')
 if (maliUpdatesRepo && !(maliUpdatesRepo ==~ /[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/)) {
     throw new GradleException("DROIDDECK_UPDATES_REPO must look like owner/repo, not '${maliUpdatesRepo}'")
 }
@@ -137,6 +138,14 @@ if (maliRelease && !(maliRelease ==~ /v?[0-9]+(\.[0-9]+[a-z]*)*(-[0-9A-Za-z.]+)?
 // so each release installs over the one before and the updater's versionCode check holds. Letter and
 // pre-release suffixes leave the code as it is. Every other build keeps DroidDeck's versionCode and
 // versionName from defaultConfig.
+// The RP4 Pro build's own release (fix43), which the updater compares instead of the MaliBridge release:
+// DROIDDECK_RP4PRO_RELEASE (-Pdroiddeck.rp4proRelease), else tools/release/rp4pro-release.txt.
+def rp4proRelease = buildSetting('DROIDDECK_RP4PRO_RELEASE', 'droiddeck.rp4proRelease') ?:
+    (rootProject.file('tools/release/rp4pro-release.txt').with { it.isFile() ? it.readLines() : [] }
+        .collect { it.trim() }.find { it && !it.startsWith('#') } ?: '')
+if (rp4proRelease && !(rp4proRelease ==~ /fix[0-9]+/)) {
+    throw new GradleException("The RP4 Pro release must look like fix43, not '${rp4proRelease}'")
+}
 def maliVersionCode = 0
 def maliVersionName = ''
 if (droiddeckApplicationId.endsWith('.mali') && maliRelease) {
@@ -173,6 +182,7 @@ android {
         buildConfigField "String", "MALIBRIDGE_VERSION", "\"${maliBridgeVersion}\""
         buildConfigField "String", "UPDATES_REPO", "\"${maliUpdatesRepo}\""
         buildConfigField "String", "MALI_RELEASE", "\"${maliRelease}\""
+        buildConfigField "String", "RP4PRO_RELEASE", "\"${rp4proRelease}\""
         buildConfigField "int", "PR_NUMBER", "${prNumber}"
         buildConfigField "boolean", "CI_BUILD", "${ciBuild}"
         buildConfigField "String", "RELEASE_SIGNER", "\"${releaseSigner}\""

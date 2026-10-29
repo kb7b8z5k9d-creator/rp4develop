@@ -25,7 +25,8 @@ object MaliReleases {
     // ---- versions ---------------------------------------------------------------------------
 
     /**
-     * A release tag such as v0.5.4, v0.5.3.1, v0.5.4b or v0.6-rc1. Dotted numbers compare one by
+     * A release tag such as v0.5.4, v0.5.3.1, v0.5.4b or v0.6-rc1, or an RP4 Pro build's fix42 (its fix number,
+     * compared as a number: fix43 is newer than fix42). Dotted numbers compare one by
      * one (missing ones count as 0, so v0.5 equals v0.5.0); letters after a number come after it
      * (0.5.4 < 0.5.4b < 0.5.4c); a pre-release (-rc1) comes before the same version without one.
      */
@@ -49,7 +50,7 @@ object MaliReleases {
         override fun hashCode() = parts.dropLastWhile { it == 0L to "" }.hashCode() * 31 + (pre?.hashCode() ?: 0)
 
         companion object {
-            private val FORM = Regex("""^[vV]?([0-9]+[a-z]*(?:\.[0-9]+[a-z]*)*)(?:-([0-9A-Za-z.]+))?$""")
+            private val FORM = Regex("""^(?:[vV]|fix)?([0-9]+[a-z]*(?:\.[0-9]+[a-z]*)*)(?:-([0-9A-Za-z.]+))?$""")
             private val PART = Regex("""^([0-9]+)([a-z]*)$""")
 
             fun parse(text: String?): Version? {
@@ -167,13 +168,16 @@ object MaliReleases {
 
     /**
      * The release's APK: DroidDeck-MaliBridge-<tag>.apk when it is there, else the one APK whose
-     * name starts with the tag (DroidDeck-MaliBridge-<tag>-test.apk). An APK named after another
+     * name starts with the tag (DroidDeck-MaliBridge-<tag>-test.apk), or, for an RP4 Pro build, ends
+     * with it (DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk for fix43). An APK named after another
      * tag is none: a release that kept last version's APK would otherwise install it as this one.
      */
     fun pickApk(assets: List<Asset>, tag: String): Asset? {
         val candidates = assets.filter { APK_NAME.matches(it.name) && it.size > 0 }
         candidates.firstOrNull { it.name == "$APK_PREFIX$tag.apk" }?.let { return it }
-        val forTag = candidates.filter { it.name.startsWith("$APK_PREFIX$tag-") || it.name.startsWith("$APK_PREFIX$tag.") }
+        val forTag = candidates.filter {
+            it.name.startsWith("$APK_PREFIX$tag-") || it.name.startsWith("$APK_PREFIX$tag.") || it.name.endsWith("-$tag.apk")
+        }
         return forTag.singleOrNull()
     }
 

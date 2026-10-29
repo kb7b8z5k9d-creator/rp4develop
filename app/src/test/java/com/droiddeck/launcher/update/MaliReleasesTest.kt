@@ -63,6 +63,13 @@ class MaliReleasesTest {
         assertTrue(MaliReleases.compare("v1.0", "v0.99")!! > 0)
     }
 
+    @Test fun rp4proFixTagsCompareByNumber() {
+        assertTrue(MaliReleases.compare("fix43", "fix42")!! > 0)
+        assertTrue(MaliReleases.compare("fix100", "fix99")!! > 0)
+        assertEquals(0, MaliReleases.compare("fix42", "fix42"))
+        assertNull(MaliReleases.compare("fix", "fix42"))
+    }
+
     @Test fun letterSuffixesComeAfterTheirNumber() {
         assertTrue(MaliReleases.compare("v0.5.4b", "v0.5.4")!! > 0)
         assertTrue(MaliReleases.compare("v0.5.4c", "v0.5.4b")!! > 0)
@@ -144,6 +151,21 @@ class MaliReleasesTest {
         assertEquals("DroidDeck-MaliBridge-v0.5.3-test.apk", MaliReleases.pickApk(listOf(asset("DroidDeck-MaliBridge-v0.5.3-test.apk")), "v0.5.3")!!.name)
         assertNull(MaliReleases.pickApk(listOf(asset("DroidDeck-MaliBridge-v0.5.3-test.apk")), "v0.5.3.1"))
         assertNull(MaliReleases.pickApk(listOf(asset("DroidDeck-MaliBridge-v0.5.4.apk")), "v0.5.5"))
+    }
+
+    @Test fun picksTheRp4proApkEndingInTheFixTag() {
+        val fix43 = asset("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk")
+        assertEquals(fix43.name, MaliReleases.pickApk(listOf(fix43, asset("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk.sha256")), "fix43")!!.name)
+        assertNull(MaliReleases.pickApk(listOf(asset("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix42.apk")), "fix43"))
+        assertNull(MaliReleases.pickApk(listOf(asset("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix143.apk")), "fix43"))
+    }
+
+    @Test fun readsAnRp4proRelease() {
+        val r = MaliReleases.parseRelease(releaseJson("fix43", listOf(assetJson("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk", 1000, tag = "fix43"))), repo)
+        assertEquals("fix43", r.tag)
+        assertEquals("DroidDeck-MaliBridge-v0.5.4.1-rp4pro-fix43.apk", r.apk!!.name)
+        assertEquals(MaliReleases.Standing.NEWER, MaliReleases.standing("fix42", r))
+        assertEquals(MaliReleases.Standing.CURRENT, MaliReleases.standing("fix43", r))
     }
 
     @Test fun picksNoApkWhenItWouldBeAGuess() {
@@ -383,10 +405,11 @@ class MaliReleasesTest {
         assertEquals(Problem.CHECKSUM, MaliReleases.checksumProblem(sha, "cd".repeat(32)))
     }
 
-    @Test fun onlyTheMaliBuildFollowsMaliBridgeReleases() {
+    @Test fun onlyTheMaliBuildFollowsTheRp4proReleases() {
         assertEquals(com.droiddeck.launcher.BuildConfig.APPLICATION_ID.endsWith(".mali"), MaliUpdater.forThisBuild)
-        if (MaliUpdater.forThisBuild) assertEquals("ASEbrahim/MaliBridge", MaliUpdater.repo)
+        if (MaliUpdater.forThisBuild) assertEquals("yujikaido/droiddeck-rp4pro", MaliUpdater.repo)
         assertTrue(MaliReleases.Version.parse(com.droiddeck.launcher.BuildConfig.MALI_RELEASE) != null)
+        assertTrue(MaliReleases.Version.parse(MaliUpdater.installedTag) != null)
     }
 
     // ---- notes ------------------------------------------------------------------------------
