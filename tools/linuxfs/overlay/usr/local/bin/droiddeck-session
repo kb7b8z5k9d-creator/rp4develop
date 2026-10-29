@@ -16,6 +16,14 @@ if [ -n "${BL_LOG:-}" ] && [ -z "${BL_INSIDE:-}" ]; then
   echo "== rootfs: $(cat /.version 2>/dev/null || echo unversioned)"
 fi
 
+# The frame limit holds games too: gamescope's -r alone paces only the screen, so a D3D9/D3D11 game that
+# does not wait for vsync keeps drawing (Ys Origin on the RP4 Pro: 77 fps under a 60 limit, the GPU busy
+# for frames nobody sees). DXVK's own limiter stops it at the source; it lands a little under its target
+# on this panel (60 -> 56.7, 62 -> 60.0), hence the 1/30 margin. A game's own DXVK_FRAME_RATE wins.
+if [ "${BL_FPS:-0}" -gt 0 ] && [ -z "${DXVK_FRAME_RATE:-}" ] && [ "${BL_DXVK_LIMIT:-1}" != 0 ]; then
+  export DXVK_FRAME_RATE=$(( BL_FPS + (BL_FPS + 29) / 30 ))
+fi
+
 prepare_locale() {
   local dir=/usr/lib/locale stamp=/usr/lib/locale/.droiddeck-archive want have= pkg
   pkg=(/var/lib/pacman/local/glibc-[0-9]*)
