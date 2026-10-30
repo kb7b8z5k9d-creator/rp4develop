@@ -1,8 +1,9 @@
-# RP4 Pro DroidDeck 源码（fix51 + 本地改动）
+# RP4 Pro DroidDeck 源码（fix51 + 本地改动 + 内置 PanVK）
 
 Retroid Pocket 4 Pro 上 DroidDeck 的源码，用于构建自签名的独立版本。
 基线是 [yujikaido/droiddeck-rp4pro](https://github.com/yujikaido/droiddeck-rp4pro) 的 `source` 分支
-（fix51，`4ff63195`），上面叠加了本项目的合成器修复。
+（fix51，`4ff63195`），上面叠加了本项目的合成器修复、PanVK 安装即用配置和通用 D3D12 改进。
+当前发布版是 v0.5.0（内置 PanVK 和 VKD3D）；安装、图形模式切换见发布仓库 README。
 
 - 设备：Retroid Pocket 4 Pro（Mali-G77 MC9，Android 13，1334×750）
 - 图形桥：[ASEbrahim/MaliBridge](https://github.com/ASEbrahim/MaliBridge) v0.5.4.2（fix51 已含）
@@ -39,12 +40,14 @@ Windows + WSL2 Ubuntu 24.04 + Docker（`droiddeck-local-cross:24.04-v3`），NDK
 
 ---
 
-# RP4 Pro DroidDeck source (fix51 + local changes)
+# RP4 Pro DroidDeck source (fix51 + local changes + bundled PanVK)
 
 Source for the DroidDeck build on the Retroid Pocket 4 Pro, used to build a self-signed, independent
 package. The base is the `source` branch of
 [yujikaido/droiddeck-rp4pro](https://github.com/yujikaido/droiddeck-rp4pro) (fix51, `4ff63195`),
-with this project's compositor fixes on top.
+with this project's compositor fixes, the install-and-play PanVK setup and general D3D12 improvements
+on top. The current release is v0.5.0 (PanVK and VKD3D bundled); installation and graphics-mode
+switching are documented in the release repository README.
 
 - Device: Retroid Pocket 4 Pro (Mali-G77 MC9, Android 13, 1334×750)
 - Graphics bridge: [ASEbrahim/MaliBridge](https://github.com/ASEbrahim/MaliBridge) v0.5.4.2 (already in fix51)
