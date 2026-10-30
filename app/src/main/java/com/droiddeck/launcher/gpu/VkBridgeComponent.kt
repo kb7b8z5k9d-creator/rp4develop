@@ -47,9 +47,23 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         }
         socket.delete()
         exited = false
-        val cmd = listOf(binary.absolutePath, "--socket", socket.absolutePath, "--log", logFile.absolutePath,
+        // A driver imported in the driver manager (PanVK, Turnip, ...) is an Android Vulkan ICD.
+        // Android's loader ignores VK_ICD_FILENAMES, so the server opens the ICD itself (--vulkan)
+        // and falls back to vk_icdGetInstanceProcAddr when the library has no loader entry point.
+        var driverLibrary: String? = null
+        runCatching {
+            val id = com.droiddeck.launcher.session.SessionPrefs.androidDriver(app())
+            val turnip = TurnipDriver(app())
+            val library = if (!id.isNullOrEmpty() && turnip.isInstalled(id)) turnip.libraryName(id) else null
+            if (library != null) {
+                driverLibrary = File(turnip.driverPath(id), library).absolutePath
+                Log.i(TAG, "vulkan driver for the server: $id ($library)")
+            }
+        }.onFailure { Log.w(TAG, "android driver selection", it) }
+        val cmdList = mutableListOf(binary.absolutePath, "--socket", socket.absolutePath, "--log", logFile.absolutePath,
             "--cache-dir", cacheDir.absolutePath)
-            .joinToString(" ") { it.replace("\\", "\\\\").replace(" ", "\\ ") }
+        driverLibrary?.let { cmdList.add("--vulkan"); cmdList.add(it) }
+        val cmd = cmdList.joinToString(" ") { it.replace("\\", "\\\\").replace(" ", "\\ ") }
         val env = arrayOf("HOME=" + app().filesDir)
         pid = HostProcess.start(cmd, env, app().filesDir, { status ->
             exited = true
