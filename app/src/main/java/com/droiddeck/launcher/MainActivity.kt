@@ -1771,6 +1771,7 @@ class MainActivity : ComponentActivity() {
         ui.postDelayed({
             try {
                 startActivity(launch.intent)
+                player.pkg?.let { com.droiddeck.launcher.frontend.RetroPlayerClose.started(this, it) }
                 com.droiddeck.launcher.frontend.RetroStats.played(this, rom.hostPath.path)
                 retroStats = com.droiddeck.launcher.frontend.RetroStats.all(this)
             } catch (e: Exception) {
