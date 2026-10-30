@@ -779,6 +779,17 @@ fun ComponentsPage(
             }
             if (narrow) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) { DeviceChip(gpu) }
             Spacer(Modifier.height(14.dp))
+            SettingsGroup(stringResource(R.string.gpu_panvk_title)) {
+                SettingsRow(
+                    stringResource(R.string.gpu_panvk_label),
+                    stringResource(if (gpu.panVk) R.string.gpu_panvk_desc_on else R.string.gpu_panvk_desc_off),
+                ) {
+                    SecondaryButton(stringResource(if (gpu.panVk) R.string.gpu_panvk_disable else R.string.gpu_panvk_enable)) {
+                        gpuActions.onTogglePanVk(!gpu.panVk)
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             if (games.isNotEmpty()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1011,7 +1022,13 @@ private fun Stack(
         LayerCard(
             title = LayerTitle(l),
             value = when (l) {
-                GPU_TAB -> if (gpu.auto) auto else gpu.activePair?.name ?: gpu.activeBundle ?: auto
+                GPU_TAB -> when {
+                    gpu.auto -> auto
+                    gpu.activePair != null -> gpu.activePair!!.name
+                    gpu.activeBundle != null -> gpu.activeBundle!!
+                    gpu.panVk -> stringResource(R.string.gpu_panvk_label)
+                    else -> auto
+                }
                 PROTON_TAB -> (view?.proton?.name ?: "") + " ▾"
                 else -> st?.let { if (it.activeFile == null) original else it.inUse } ?: ""
             },

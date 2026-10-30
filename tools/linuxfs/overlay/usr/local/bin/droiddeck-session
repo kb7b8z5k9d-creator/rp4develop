@@ -123,6 +123,9 @@ fi
 # ANGLE's Vulkan device, no EGL window surface); BL_VKBRIDGE_CEF_VULKAN=0 leaves it off.
 # BL_VKBRIDGE_WEBHELPER_ARGS replaces the whole layout for experiments.
 bl_webhelper_layout() {
+  # RP4 Pro default: ANGLE on Vulkan, Chromium's own Vulkan compositing off (Big Picture flicker).
+  : "${BL_VKBRIDGE_CEF_ANGLE:=vulkan}"
+  : "${BL_VKBRIDGE_CEF_VULKAN:=0}"
   if [ -n "${BL_VKBRIDGE_WEBHELPER_ARGS:-}" ]; then
     printf '%s\n' "$BL_VKBRIDGE_WEBHELPER_ARGS"
   elif [ -z "${BL_VKBRIDGE_CEF_ANGLE:-}" ]; then
