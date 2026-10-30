@@ -6,6 +6,7 @@ import android.util.Log
 import com.droiddeck.launcher.core.HostProcess
 import com.droiddeck.launcher.core.SessionPart
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * The Vulkan bridge server (external/MaliBridge) for one session.
@@ -35,13 +36,14 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         socket.parentFile?.mkdirs()
         // Pipeline cache kept across sessions (Mali recompiles everything in a new process otherwise).
         val cacheDir = cacheDir(app())
+        val driverLibrary = selectedDriverLibrary(app())
         // Setup's "Safe mode", for a new server and for the in-app one that is reused (it reads
         // the file again at each client): the JNI call stays as it is.
         writeMode(cacheDir, com.droiddeck.launcher.session.SessionPrefs.vkBridgeMode(app()))
         // A separate process by default: a crash in the GPU driver (seen once inside Mali's
         // vkBeginCommandBuffer) then ends the session, not the app. In-process gave the same driver
         // and the same 119 extensions on the Tab S10+; it remains the fallback.
-        if (VkBridgeNative.start(app(), socket, logFile, cacheDir)) {
+        if (driverLibrary == null && VkBridgeNative.start(app(), socket, logFile, cacheDir)) {
             Log.i(TAG, "server ready in the app's process at $socket")
             return
         }
@@ -50,19 +52,10 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         // A driver imported in the driver manager (PanVK, Turnip, ...) is an Android Vulkan ICD.
         // Android's loader ignores VK_ICD_FILENAMES, so the server opens the ICD itself (--vulkan)
         // and falls back to vk_icdGetInstanceProcAddr when the library has no loader entry point.
-        var driverLibrary: String? = null
-        runCatching {
-            val id = com.droiddeck.launcher.session.SessionPrefs.androidDriver(app())
-            val turnip = TurnipDriver(app())
-            val library = if (!id.isNullOrEmpty() && turnip.isInstalled(id)) turnip.libraryName(id) else null
-            if (library != null) {
-                driverLibrary = File(turnip.driverPath(id), library).absolutePath
-                Log.i(TAG, "vulkan driver for the server: $id ($library)")
-            }
-        }.onFailure { Log.w(TAG, "android driver selection", it) }
+        driverLibrary?.let { Log.i(TAG, "vulkan driver for the server: ${it.absolutePath}") }
         val cmdList = mutableListOf(binary.absolutePath, "--socket", socket.absolutePath, "--log", logFile.absolutePath,
             "--cache-dir", cacheDir.absolutePath)
-        driverLibrary?.let { cmdList.add("--vulkan"); cmdList.add(it) }
+        driverLibrary?.let { cmdList.add("--vulkan"); cmdList.add(it.absolutePath) }
         val cmd = cmdList.joinToString(" ") { it.replace("\\", "\\\\").replace(" ", "\\ ") }
         val env = arrayOf("HOME=" + app().filesDir)
         pid = HostProcess.start(cmd, env, app().filesDir, { status ->
@@ -79,16 +72,17 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         val waited = System.currentTimeMillis() - began
         Log.i(TAG, if (socket.exists()) "server ready (pid $pid) at $socket after $waited ms"
             else "server NOT ready (pid $pid, exited=$exited) after $waited ms; see $logFile")
-        if (!socket.exists() && VkBridgeNative.start(app(), socket, logFile, cacheDir)) Log.i(TAG, "server ready in the app's process at $socket")
+        if (!socket.exists() && driverLibrary == null && VkBridgeNative.start(app(), socket, logFile, cacheDir)) Log.i(TAG, "server ready in the app's process at $socket")
     }
 
     override fun stop() {
         // The in-app server outlives sessions: its socket stays.
+        val wasProcess = pid > 0
         if (pid > 0) {
             Process.killProcess(pid)
             pid = -1
         }
-        if (!VkBridgeNative.serving) socket.delete()
+        if (wasProcess || !VkBridgeNative.serving) socket.delete()
     }
 
     override fun suspendPid(): Int = pid
@@ -97,6 +91,8 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
         private const val TAG = "VkBridge"
         private const val CACHE_DIR = "vkbridge-pipelines"
         private const val MODE_FILE = "mode"
+        private data class LibraryStamp(val path: String, val size: Long, val modified: Long)
+        private var cachedLibrary: Pair<LibraryStamp, String>? = null
 
         /**
          * The server's own directory (--cache-dir): pipeline caches, the startup probe's device
@@ -107,10 +103,37 @@ class VkBridgeComponent(private val socket: File, private val logFile: File) : S
          * limit, VKBRIDGE_PCACHE_TOTAL_MB). A directory left in cacheDir by an older build is moved
          * over once.
          */
+        internal fun selectedDriverLibrary(context: Context): File? = runCatching {
+            val id = com.droiddeck.launcher.session.SessionPrefs.androidDriver(context)
+            val drivers = TurnipDriver(context)
+            if (id.isEmpty() || !drivers.isInstalled(id)) null
+            else drivers.libraryName(id)?.let { File(drivers.driverPath(id), it).takeIf(File::isFile) }
+        }.onFailure { Log.w(TAG, "android driver selection", it) }.getOrNull()
+
+        /** An imported ICD has its own report and probe cache, keyed by the actual library bytes. */
+        @Synchronized internal fun importedCacheName(library: File): String {
+            val stamp = LibraryStamp(library.absolutePath, library.length(), library.lastModified())
+            cachedLibrary?.takeIf { it.first == stamp }?.let { return it.second }
+            val digest = MessageDigest.getInstance("SHA-256")
+            library.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            val name = "icd-" + digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            cachedLibrary = stamp to name
+            return name
+        }
+
         fun cacheDir(context: Context): File {
-            val dir = File(context.filesDir, CACHE_DIR)
+            val base = File(context.filesDir, CACHE_DIR)
             val old = File(context.cacheDir, CACHE_DIR)
-            if (old.isDirectory) migrate(old, dir)
+            if (old.isDirectory) migrate(old, base)
+            val library = selectedDriverLibrary(context)
+            val dir = if (library != null) File(base, importedCacheName(library)) else base
             dir.mkdirs()
             return dir
         }
