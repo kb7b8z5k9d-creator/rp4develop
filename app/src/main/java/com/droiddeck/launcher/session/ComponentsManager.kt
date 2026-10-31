@@ -710,12 +710,53 @@ object ComponentsManager {
     }
 
 
-    /** auto: chosen by DroidDeck for this device (bridgeDxvk), not by the player; replaced or undone when that changes. */
+    /** Prepare the bundled default before Steam starts; explicit component choices always win. */
+    fun ensureBundledVkd3d(context: Context, protonId: String, file: String, packageHash: String,
+                          legacyApplied: Boolean = false): Boolean = synchronized(lock) {
+        val p = proton(context, protonId)
+        val state = loadState(context)
+        val defaults = state.sub("bundledVkd3d").sub(p.id)
+        if (defaults.optBoolean("disabled")) return false
+        // Pending player choices win, too. Never queue a default behind a game.
+        if (state.sub("queued").optJSONObject(p.id)?.has("vkd3d") == true) return false
+        val active = state.sub("active").optJSONObject(p.id)?.optJSONObject("vkd3d")
+        if ((active != null && active.optString("file") != file) ||
+            (active == null && legacyApplied && !defaults.has("protonVersion"))) {
+            defaults.put("disabled", true)
+            saveState(context, state)
+            return false
+        }
+        val expected = active?.optJSONObject("files")
+        val current = active?.optString("protonVersion") == p.version &&
+            expected != null && expected.length() > 0 && expected.keys().asSequence().all { rel ->
+                val dll = File(p.dir, rel)
+                dll.isFile && Hashes.sha256(dll) == expected.getString(rel)
+            }
+        if (current && defaults.optString("packageSha256") == packageHash) {
+            if (defaults.optString("protonVersion") != p.version) {
+                defaults.put("protonVersion", p.version).put("packageSha256", packageHash)
+                saveState(context, state)
+            }
+            return true
+        }
+        check(!inUse(context, p)) { "Close games using ${p.name} before preparing its bundled VKD3D." }
+        val wcp = File(packagesDir(context), safeName(file))
+        check(Hashes.sha256(wcp) == packageHash) { "Bundled VKD3D package verification failed" }
+        val info = packageInfo(context, wcp)
+        check(info.comp == "vkd3d") { "Not a VKD3D package: $file" }
+        applyPackage(context, p, info, wcp, state, auto = true)
+        defaults.put("protonVersion", p.version).put("packageSha256", packageHash)
+        saveState(context, state)
+        true
+    }
+
+    /** auto: chosen by DroidDeck for this device, not by the player. */
     fun swap(context: Context, protonId: String, file: String, auto: Boolean = false): String = synchronized(lock) {
         val p = proton(context, protonId)
         val wcp = File(packagesDir(context), safeName(file))
         val info = packageInfo(context, wcp)
         val state = loadState(context)
+        if (!auto && info.comp == "vkd3d") state.sub("bundledVkd3d").sub(p.id).put("disabled", true)
         if (inUse(context, p)) {
             state.sub("queued").sub(p.id).put(info.comp, JSONObject().put("kind", "package").put("file", wcp.name).put("label", info.version)
                 .apply { if (auto) put("auto", true) })
@@ -744,6 +785,7 @@ object ComponentsManager {
         val wcp = File(originalsDir(context), "$protonId/${safeName(protonVersion)}/$comp.wcp")
         check(wcp.isFile) { context.getString(R.string.cmgr_original_missing) }
         val state = loadState(context)
+        if (comp == "vkd3d") state.sub("bundledVkd3d").sub(p.id).put("disabled", true)
         if (inUse(context, p)) {
             state.sub("queued").sub(p.id).put(comp, JSONObject().put("kind", "original").put("protonVersion", protonVersion).put("label", "Original $protonVersion"))
             saveState(context, state)

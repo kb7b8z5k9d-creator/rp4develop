@@ -1418,6 +1418,8 @@
     <string name="session_logs_archive_failed">Could not create the session log archive.</string>
     <string name="session_logs_share_failed">Could not share the session logs.</string>
     <string name="session_starting_session">Starting the session…</string>
+    <string name="session_preparing_components">Preparing game components…</string>
+    <string name="session_components_prepare_failed">Could not prepare game components: %1$s. Free up storage if needed, then try again.</string>
     <string name="session_runtime_downloading">downloading the Linux runtime</string>
     <string name="session_runtime_downloading_mb">downloading the Linux runtime · %1$d of %2$d MB</string>
     <string name="session_runtime_checking">checking the Linux runtime</string>

@@ -175,8 +175,8 @@ android {
         applicationId droiddeckApplicationId
         minSdkVersion 26
         targetSdkVersion 28
-        versionCode 14
-        versionName "0.5.0"
+        versionCode 15
+        versionName "0.5.1"
         buildConfigField "String", "BUILD_LABEL", "\"${escapedBuildLabel}\""
         buildConfigField "String", "SOURCE_COMMIT", "\"${sourceCommit}\""
         buildConfigField "String", "MALIBRIDGE_VERSION", "\"${maliBridgeVersion}\""
@@ -248,9 +248,7 @@ android {
         release {
             minifyEnabled false
             signingConfig rootProject.file('keystore/lab-release.jks').exists() ? signingConfigs.lab : signingConfigs.testkey
-            // Mali bridge development fork: debuggable so `adb shell run-as` reaches the session
-            // logs and VkBridgeNative's development override (-Pdroiddeck.notDebuggable to drop).
-            debuggable !project.hasProperty('droiddeck.notDebuggable')
+            debuggable false
         }
     }
 
@@ -298,7 +296,9 @@ tasks.named('preBuild').configure { dependsOn(stageSessionScripts) }
 def runtimeAssetsDir = layout.buildDirectory.dir('runtimeAssets')
 def stageRuntimeAssets = tasks.register('stageRuntimeAssets', Sync) {
     dependsOn(stageSessionScripts)
-    from(layout.projectDirectory.dir('src/main/assets')) { exclude 'pulseaudio.tzst' }
+    from(layout.projectDirectory.dir('src/main/assets')) {
+        exclude 'pulseaudio.tzst', 'linuxfs/usr/local/bin/droiddeck-vkbridge-smoke'
+    }
     from(layout.buildDirectory.dir('prepared-assets'))
     into(runtimeAssetsDir)
 }

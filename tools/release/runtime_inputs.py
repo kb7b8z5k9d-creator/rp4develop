@@ -47,6 +47,8 @@ def outputs(root):
         base = root / 'app/src/main/assets' / tree
         for path in base.rglob('*'):
             if path.is_file() and not any(part.startswith('.') for part in path.relative_to(base).parts):
+                if tree == 'linuxfs' and path.relative_to(base).as_posix() == 'usr/local/bin/droiddeck-vkbridge-smoke':
+                    continue  # Developer smoke binary is not shipped in player APKs.
                 result['assets/' + tree + '/' + str(path.relative_to(base))] = str(path.relative_to(root))
     for library in ['libproot.so', 'libproot-loader.so', 'libdirectaudiorelay.so']:
         result['lib/arm64-v8a/' + library] = 'app/src/main/jniLibs/arm64-v8a/' + library

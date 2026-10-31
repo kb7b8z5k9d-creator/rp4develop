@@ -410,7 +410,8 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
                 !com.droiddeck.launcher.runtime.DesktopCatalog.desktopInstalled(this)
             val needProton = (intent.getStringExtra(SessionService.EXTRA_MODE) ?: SessionService.MODE_STEAM) == SessionService.MODE_STEAM &&
                 com.droiddeck.launcher.runtime.DesktopCatalog.protonSeedNeeded(this)
-            if (needRuntime || needDesktop || needProton) installThenStart(needRuntime, needDesktop, needProton)
+            if (needRuntime || needDesktop || needProton || com.droiddeck.launcher.gpu.BuiltinProfile.isTargetDevice())
+                installThenStart(needRuntime, needDesktop, needProton)
         }
         hud = PerfHud(this)
         hud.onPresentingWindowChanged = {
@@ -1104,14 +1105,15 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun installThenStart(runtime: Boolean, desktop: Boolean, proton: Boolean = false) {
         if (SessionState.stopRequested) return
         installingRuntime = true
-        SessionState.installing = if (runtime) "runtime" else if (desktop) "desktop" else "proton"
+        SessionState.installing = if (runtime) "runtime" else if (desktop) "desktop" else if (proton) "proton" else "components"
         SessionEvents.transition(
             SessionPhase.INSTALLING_RUNTIME,
             "${SessionState.installing}.installing",
             mapOf("component" to SessionState.installing),
         )
         val first = if (runtime) RUNTIME_LINES else if (desktop) DESKTOP_LINES else PROTON_LINES
-        loading.say(getString(first.downloading), first.topic, readable = true)
+        if (runtime || desktop || proton) loading.say(getString(first.downloading), first.topic, readable = true)
+        else loading.say(getString(R.string.session_preparing_components), LoadingState.Topic.SESSION, readable = true)
         loading.percent = -1
         Thread({
             var failedComponent: String? = null
@@ -1131,8 +1133,26 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
                 SessionEvents.transition(SessionPhase.INSTALLING_RUNTIME, "proton.installing", mapOf("component" to "proton"))
                 val protonProblem = installProton()
                 if (protonProblem == null) SessionEvents.record("proton.ready")
-                else SessionEvents.record("proton.skipped", mapOf("reason" to protonProblem))
+                else {
+                    SessionEvents.record("proton.skipped", mapOf("reason" to protonProblem))
+                    if (com.droiddeck.launcher.gpu.BuiltinProfile.isTargetDevice()) {
+                        problem = protonProblem
+                        failedComponent = "proton"
+                    }
+                }
             }
+            if (problem == null && !SessionState.stopRequested) {
+                uiHandler.post {
+                    loading.percent = -1
+                    loading.say(getString(R.string.session_preparing_components), LoadingState.Topic.SESSION, readable = true)
+                }
+                runCatching { com.droiddeck.launcher.gpu.BuiltinProfile.prepareForSession(this) }
+                    .onFailure {
+                        problem = getString(R.string.session_components_prepare_failed, it.message ?: it.javaClass.simpleName)
+                        failedComponent = "components"
+                    }
+            }
+            val startProblem = problem
             uiHandler.post {
                 installingRuntime = false
                 SessionState.installing = null
@@ -1143,11 +1163,16 @@ class SessionActivity : ComponentActivity(), SurfaceHolder.Callback {
                     finish()
                     return@post
                 }
-                if (problem != null) {
-                    val code = if (failedComponent == "runtime") "RUNTIME_INSTALL_FAILED" else "DESKTOP_INSTALL_FAILED"
-                    SessionEvents.fail(code, problem)
+                if (startProblem != null) {
+                    val code = when (failedComponent) {
+                        "runtime" -> "RUNTIME_INSTALL_FAILED"
+                        "proton" -> "PROTON_INSTALL_FAILED"
+                        "components" -> "COMPONENT_PREPARE_FAILED"
+                        else -> "DESKTOP_INSTALL_FAILED"
+                    }
+                    SessionEvents.fail(code, startProblem)
                     collectStartArtifacts("session start failed")
-                    loading.showEnded(problem)
+                    loading.showEnded(startProblem)
                     focusEndedScreen()
                     return@post
                 }

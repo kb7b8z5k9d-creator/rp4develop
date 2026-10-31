@@ -283,7 +283,8 @@ class SessionService : Service() {
 
     private fun tuDebug(linuxDriverId: String): String? {
         val override = File(Environment.getExternalStorageDirectory(), TU_DEBUG_SWITCH)
-            .takeIf { it.isFile }?.let { FileUtils.readString(it)?.trim() }
+            .takeIf { com.droiddeck.launcher.BuildConfig.DEBUG && it.isFile }
+            ?.let { FileUtils.readString(it)?.trim() }
         if (!override.isNullOrEmpty()) return override
         if (SessionPrefs.tuSysmem(this)) return "sysmem"
         if (linuxDriverId.isEmpty()) return null
@@ -627,6 +628,11 @@ class SessionService : Service() {
             components.add(it)
         }
         guest.add("BL_VKBRIDGE=1")
+        if (com.droiddeck.launcher.gpu.BuiltinProfile.isTargetDevice()) {
+            guest.add("BL_VKBRIDGE_CEF_ANGLE=vulkan")
+            guest.add("BL_VKBRIDGE_CEF_VULKAN=0")
+        }
+        if (!com.droiddeck.launcher.BuildConfig.DEBUG) guest.add("VKBRIDGE_FRAMES=0")
         // Setup's "Steam menus": older Malis (G57, G68 and their generation) draw Steam's browser UI
         // black on the GPU, so it is drawn in software there unless the player picks the GPU.
         val menus = SessionPrefs.steamMenus(this)
@@ -639,7 +645,7 @@ class SessionService : Service() {
         guest.add("VKBRIDGE_SOCKET=" + socket.path)
         guest.add("VKBRIDGE_CLIENT_LOG=" + File(sessionDir, "vkbridge-client.log").path)
         // Setup's "Safe mode": the client's defaults by mode (the server reads <cache dir>/mode,
-        // written by VkBridgeComponent); /root/.vkbridge-env can still override it.
+        // written by VkBridgeComponent).
         guest.add("VKBRIDGE_MODE=" + SessionPrefs.vkBridgeMode(this))
         // The render node gamescope sees is Mali's device (or the GPU's own DRM render node, on an
         // Xclipse) standing in (LinuxRuntime.bindGpuNode): the ICD reports its numbers, and the
