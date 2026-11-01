@@ -1,10 +1,6 @@
 name: Build gamescope (patched)
 
 on:
-  push:
-    paths:
-      - 'tools/gamescope/**'
-      - '.github/workflows/build-gamescope.yml'
   workflow_dispatch:
     inputs:
       tag:

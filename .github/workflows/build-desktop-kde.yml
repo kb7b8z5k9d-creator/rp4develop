@@ -1,10 +1,6 @@
 name: Build desktop package (KDE Plasma)
 
 on:
-  push:
-    paths:
-      - 'tools/desktop-kde/**'
-      - '.github/workflows/build-desktop-kde.yml'
   workflow_dispatch:
     inputs:
       tag:
